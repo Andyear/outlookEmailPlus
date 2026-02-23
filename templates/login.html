@@ -180,7 +180,8 @@
                 if (data.success) {
                     window.location.href = '/';
                 } else {
-                    errorMessage.textContent = data.error || '登录失败';
+                    const msg = (data.error && data.error.message) ? data.error.message : (data.error || '登录失败');
+                    errorMessage.textContent = msg;
                     errorMessage.classList.add('show');
                     loginBtn.disabled = false;
                     loginBtn.textContent = '登 录';

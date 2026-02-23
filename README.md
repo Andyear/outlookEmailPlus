@@ -190,7 +190,9 @@ services:
       - ./data:/app/data
     environment:
       - LOGIN_PASSWORD=admin123
+      - SECRET_KEY=your-secret-key-here
       - FLASK_ENV=production
+      - SCHEDULER_AUTOSTART=true
     restart: unless-stopped
 ```
 
@@ -218,6 +220,7 @@ docker-compose down
 | `SECRET_KEY` | Session 密钥（**必须设置**） | 无默认值，必须提供，请勿随意修改，数据库会基于这个加密，如果要改请先导出邮箱账号，改之后再重新导入账号 |
 | `LOGIN_PASSWORD` | 登录密码 | `admin123` |
 | `FLASK_ENV` | 运行环境 | `production` |
+| `SCHEDULER_AUTOSTART` | 是否自动启动后台调度器（定时刷新/心跳） | `true` |
 | `PORT` | 应用端口 | `5000` |
 | `HOST` | 监听地址 | `0.0.0.0` |
 | `DATABASE_PATH` | 数据库路径 | `data/outlook_accounts.db` |
@@ -231,6 +234,46 @@ docker-compose down
 # 使用 Python 生成随机密钥
 python -c 'import secrets; print(secrets.token_hex(32))'
 ```
+
+## ✅ 运行验证（定时刷新/健康状态）
+
+- 定时刷新是否真实运行、未来触发时间预览、锁/运行中状态、最近一次定时刷新统计等：见 `docs/RUN/运行与定时刷新验证指南.md`
+- 发布前回归清单与 P0 验收对照：见 `docs/QA/回归验证清单.md`、`docs/QA/P0验收对照表.md`
+- 性能与容量基线（1,000 账号）：见 `docs/PERF/性能与容量基线.md`
+
+## 🧪 自动化测试
+
+```bash
+pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+## 🗂️ 项目结构（模块化）
+
+- 入口（部署不变）：`web_outlook_app:app`（`web_outlook_app.py`）
+- 后端（Flask）：`outlook_web/`
+  - `outlook_web/app.py`：`create_app()` 装配入口（DB/CSRF/错误处理/Blueprint 注册/调度器启动控制）
+  - `outlook_web/routes/`：按领域拆分的 Blueprint（URL 不变）
+  - `outlook_web/repositories/`：SQL 访问与数据映射集中
+  - `outlook_web/services/`：业务编排（Graph/IMAP/GPTMail/刷新/删除回退等）
+  - `outlook_web/security/`：鉴权/加密/CSRF
+  - `outlook_web/errors.py`：统一错误结构/trace_id/默认脱敏
+  - `outlook_web/legacy.py`：迁移期 view/兼容层（逐步瘦身，外部行为不变优先）
+- 前端（零构建）：
+  - `templates/index.html`：页面骨架（CSS/JS 外链）
+  - `static/css/main.css`
+  - `static/js/main.js` + `static/js/features/*.js`
+- 测试：`tests/`（推荐命令：`python -m unittest discover -s tests -v`）
+
+更详细的开发者说明见：`docs/DEV/00002-前后端拆分-开发者指南.md`。
+
+### 如何新增/调整一个 API（推荐流程）
+
+1. 在 `outlook_web/repositories/` 增加/调整 SQL（必要时）
+2. 在 `outlook_web/services/` 编排业务逻辑（尽量保持纯业务，不直接依赖 Flask request）
+3. 在 `outlook_web/legacy.py` 增加一个薄的 view 函数（迁移期），仅做鉴权/参数解析/调用 service
+4. 在 `outlook_web/routes/<domain>.py` 绑定 URL（Blueprint），并确保 URL/方法/响应结构保持契约一致
+5. 补齐/更新单测：优先门禁 `tests/test_smoke_contract.py`，再补充对应边界/回归用例
 
 ### 数据持久化
 

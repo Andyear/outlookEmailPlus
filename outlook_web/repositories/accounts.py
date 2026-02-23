@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import sqlite3
+from typing import Any, Dict, List, Optional
+
+from outlook_web.db import get_db
+from outlook_web.security.crypto import decrypt_data, encrypt_data
+
+
+def load_accounts(group_id: int = None) -> List[Dict]:
+    """从数据库加载邮箱账号（自动解密敏感字段，批量加载 tags 避免 N+1）"""
+    db = get_db()
+    if group_id:
+        cursor = db.execute(
+            """
+            SELECT a.*, g.name as group_name, g.color as group_color
+            FROM accounts a
+            LEFT JOIN groups g ON a.group_id = g.id
+            WHERE a.group_id = ?
+            ORDER BY a.created_at DESC
+            """,
+            (group_id,),
+        )
+    else:
+        cursor = db.execute(
+            """
+            SELECT a.*, g.name as group_name, g.color as group_color
+            FROM accounts a
+            LEFT JOIN groups g ON a.group_id = g.id
+            ORDER BY a.created_at DESC
+            """
+        )
+    rows = cursor.fetchall()
+
+    tags_by_account: Dict[int, List[Dict[str, Any]]] = {}
+    try:
+        account_ids = [int(r["id"]) for r in rows]
+    except Exception:
+        account_ids = []
+
+    if account_ids:
+        try:
+            placeholders = ",".join(["?"] * len(account_ids))
+            tag_rows = db.execute(
+                f"""
+                SELECT at.account_id as account_id, t.*
+                FROM account_tags at
+                JOIN tags t ON t.id = at.tag_id
+                WHERE at.account_id IN ({placeholders})
+                ORDER BY at.account_id ASC, t.created_at DESC
+                """,
+                account_ids,
+            ).fetchall()
+
+            for tr in tag_rows:
+                tag_dict = dict(tr)
+                acc_id = tag_dict.pop("account_id", None)
+                if acc_id is None:
+                    continue
+                tags_by_account.setdefault(int(acc_id), []).append(tag_dict)
+        except Exception:
+            tags_by_account = {}
+
+    accounts: List[Dict[str, Any]] = []
+    for row in rows:
+        account = dict(row)
+
+        if account.get("password"):
+            try:
+                account["password"] = decrypt_data(account["password"])
+            except Exception:
+                pass
+        if account.get("refresh_token"):
+            try:
+                account["refresh_token"] = decrypt_data(account["refresh_token"])
+            except Exception:
+                pass
+
+        account_id_value = account.get("id")
+        try:
+            account_id_value = int(account_id_value)
+        except Exception:
+            account_id_value = None
+
+        account["tags"] = tags_by_account.get(account_id_value, []) if account_id_value is not None else []
+        accounts.append(account)
+    return accounts
+
+
+def get_account_by_email(email_addr: str) -> Optional[Dict]:
+    """根据邮箱地址获取账号（自动解密敏感字段）"""
+    db = get_db()
+    cursor = db.execute("SELECT * FROM accounts WHERE email = ?", (email_addr,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    account = dict(row)
+    if account.get("password"):
+        try:
+            account["password"] = decrypt_data(account["password"])
+        except Exception:
+            pass
+    if account.get("refresh_token"):
+        try:
+            account["refresh_token"] = decrypt_data(account["refresh_token"])
+        except Exception:
+            pass
+    return account
+
+
+def get_account_by_id(account_id: int) -> Optional[Dict]:
+    """根据 ID 获取账号（含 group_name/group_color，自动解密敏感字段）"""
+    db = get_db()
+    cursor = db.execute(
+        """
+        SELECT a.*, g.name as group_name, g.color as group_color
+        FROM accounts a
+        LEFT JOIN groups g ON a.group_id = g.id
+        WHERE a.id = ?
+        """,
+        (account_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    account = dict(row)
+    if account.get("password"):
+        try:
+            account["password"] = decrypt_data(account["password"])
+        except Exception:
+            pass
+    if account.get("refresh_token"):
+        try:
+            account["refresh_token"] = decrypt_data(account["refresh_token"])
+        except Exception:
+            pass
+    return account
+
+
+def add_account(
+    email_addr: str,
+    password: str,
+    client_id: str,
+    refresh_token: str,
+    group_id: int = 1,
+    remark: str = "",
+    db: Optional[sqlite3.Connection] = None,
+    commit: bool = True,
+) -> bool:
+    """添加邮箱账号（支持外部事务批量导入）"""
+    db = db or get_db()
+    try:
+        encrypted_password = encrypt_data(password) if password else password
+        encrypted_refresh_token = encrypt_data(refresh_token) if refresh_token else refresh_token
+
+        db.execute(
+            """
+            INSERT INTO accounts (email, password, client_id, refresh_token, group_id, remark)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (email_addr, encrypted_password, client_id, encrypted_refresh_token, group_id, remark),
+        )
+        if commit:
+            db.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    except Exception:
+        return False
+
+
+def update_account(
+    account_id: int,
+    email_addr: str,
+    password: Optional[str],
+    client_id: Optional[str],
+    refresh_token: Optional[str],
+    group_id: int,
+    remark: str,
+    status: str,
+) -> bool:
+    """更新邮箱账号"""
+    db = get_db()
+    try:
+        existing = db.execute(
+            """
+            SELECT password, client_id, refresh_token
+            FROM accounts
+            WHERE id = ?
+            """,
+            (account_id,),
+        ).fetchone()
+        if not existing:
+            return False
+
+        new_client_id = client_id.strip() if isinstance(client_id, str) and client_id.strip() else existing["client_id"]
+
+        encrypted_password = existing["password"]
+        if isinstance(password, str) and password.strip():
+            encrypted_password = encrypt_data(password)
+
+        encrypted_refresh_token = existing["refresh_token"]
+        if isinstance(refresh_token, str) and refresh_token.strip():
+            encrypted_refresh_token = encrypt_data(refresh_token)
+
+        if not email_addr or not new_client_id or not encrypted_refresh_token:
+            return False
+
+        db.execute(
+            """
+            UPDATE accounts
+            SET email = ?, password = ?, client_id = ?, refresh_token = ?,
+                group_id = ?, remark = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (email_addr, encrypted_password, new_client_id, encrypted_refresh_token, group_id, remark, status, account_id),
+        )
+        db.commit()
+        return True
+    except Exception:
+        return False
+
+
+def delete_account_by_id(account_id: int) -> bool:
+    """删除邮箱账号"""
+    db = get_db()
+    try:
+        db.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        db.commit()
+        return True
+    except Exception:
+        return False
+
+
+def delete_account_by_email(email_addr: str) -> bool:
+    """根据邮箱地址删除账号"""
+    db = get_db()
+    try:
+        db.execute("DELETE FROM accounts WHERE email = ?", (email_addr,))
+        db.commit()
+        return True
+    except Exception:
+        return False
+
