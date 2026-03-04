@@ -266,10 +266,14 @@ class MultiMailboxSupportTests(unittest.TestCase):
             called.append((client_id, refresh_token, proxy_url))
             return True, "ok"
 
-        with patch("outlook_web.services.scheduler.time.sleep", return_value=None), patch(
-            "outlook_web.services.scheduler.acquire_distributed_lock",
-            return_value=(True, {}),
-        ), patch("outlook_web.services.scheduler.release_distributed_lock", return_value=None):
+        with (
+            patch("outlook_web.services.scheduler.time.sleep", return_value=None),
+            patch(
+                "outlook_web.services.scheduler.acquire_distributed_lock",
+                return_value=(True, {}),
+            ),
+            patch("outlook_web.services.scheduler.release_distributed_lock", return_value=None),
+        ):
             scheduled_refresh_task(self.app, fake_test_refresh_token)
 
         self.assertGreaterEqual(len(called), 1)

@@ -106,32 +106,36 @@ class ErrorAndTraceTests(unittest.TestCase):
         from outlook_web.services import graph as graph_service
         from outlook_web.services import imap as imap_service
 
-        with patch.object(
-            accounts_repo,
-            "get_account_by_email",
-            return_value={
-                "email": email_addr,
-                "client_id": "cid",
-                "refresh_token": "rt",
-                "group_id": None,
-            },
-        ), patch.object(
-            graph_service,
-            "delete_emails_graph",
-            return_value={
-                "success": False,
-                "error": graph_error,
-                "success_count": 0,
-                "failed_count": 2,
-                "errors": ["e1"],
-            },
-        ), patch.object(
-            imap_service,
-            "delete_emails_imap",
-            side_effect=[
-                {"success": False, "error": "imap_new_failed"},
-                {"success": False, "error": "imap_old_failed"},
-            ],
+        with (
+            patch.object(
+                accounts_repo,
+                "get_account_by_email",
+                return_value={
+                    "email": email_addr,
+                    "client_id": "cid",
+                    "refresh_token": "rt",
+                    "group_id": None,
+                },
+            ),
+            patch.object(
+                graph_service,
+                "delete_emails_graph",
+                return_value={
+                    "success": False,
+                    "error": graph_error,
+                    "success_count": 0,
+                    "failed_count": 2,
+                    "errors": ["e1"],
+                },
+            ),
+            patch.object(
+                imap_service,
+                "delete_emails_imap",
+                side_effect=[
+                    {"success": False, "error": "imap_new_failed"},
+                    {"success": False, "error": "imap_old_failed"},
+                ],
+            ),
         ):
             resp = client.post(
                 "/api/emails/delete",
@@ -178,23 +182,27 @@ class ErrorAndTraceTests(unittest.TestCase):
         from outlook_web.services import graph as graph_service
         from outlook_web.services import imap as imap_service
 
-        with patch.object(
-            accounts_repo,
-            "get_account_by_email",
-            return_value={
-                "email": email_addr,
-                "client_id": "cid",
-                "refresh_token": "rt",
-                "group_id": None,
-            },
-        ), patch.object(
-            graph_service,
-            "delete_emails_graph",
-            return_value=graph_res,
-        ), patch.object(
-            imap_service,
-            "delete_emails_imap",
-        ) as imap_mock:
+        with (
+            patch.object(
+                accounts_repo,
+                "get_account_by_email",
+                return_value={
+                    "email": email_addr,
+                    "client_id": "cid",
+                    "refresh_token": "rt",
+                    "group_id": None,
+                },
+            ),
+            patch.object(
+                graph_service,
+                "delete_emails_graph",
+                return_value=graph_res,
+            ),
+            patch.object(
+                imap_service,
+                "delete_emails_imap",
+            ) as imap_mock,
+        ):
             resp = client.post(
                 "/api/emails/delete",
                 json={"email": email_addr, "ids": ["m1", "m2"]},
