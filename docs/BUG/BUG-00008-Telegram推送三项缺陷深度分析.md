@@ -248,3 +248,60 @@ return max(10, interval)
 | T-12: 重复开启不重置游标 | ✅ 通过（幂等行为保留） |
 | T-12b: 禁用后重新启用重置游标 | ✅ 通过（新增） |
 | 全量测试 (203 项) | ✅ 全部通过 |
+
+---
+
+## 七、BUG-TG-006: IMAP 邮件时区导致同一封邮件被重复推送
+
+### 7.1 现象
+
+每次 Job 运行都推送同一封邮件（日志持续出现 `sent=1`），即使没有新邮件到达。
+
+### 7.2 根因
+
+`_fetch_new_emails_imap` 中的时区不一致：
+
+```python
+# 邮件 Date 头带时区（如 +0800）
+received_dt = parsedate_to_datetime(date_str)  # → 2026-03-05T17:00:00+08:00
+received_iso = received_dt.strftime("%Y-%m-%dT%H:%M:%S")  # → "2026-03-05T17:00:00"（本地时间！）
+
+# 游标是 UTC
+since = "2026-03-05T09:11:07"  # UTC
+
+# 比较
+"2026-03-05T17:00:00" <= "2026-03-05T09:11:07"  # → False → 未过滤 → 重复推送！
+```
+
+本质：`strftime` 去掉了时区信息，CST 本地时间（17:00）的数值永远大于对应 UTC（09:00），
+导致同一邮件在每次 Job 中都通过 `received_iso <= since` 过滤。
+
+### 7.3 与 MailAggregator_Pro 对比
+
+MailAggregator_Pro 用 Message-ID 去重，不依赖时间比较，天然避免此问题。
+而我们的时间游标方案必须保证 **所有时间戳统一使用 UTC**。
+
+### 7.4 修复
+
+```python
+received_dt = parsedate_to_datetime(date_str)
+if received_dt.tzinfo is not None:
+    received_dt = received_dt.astimezone(timezone.utc)  # ← 统一转 UTC
+received_iso = received_dt.strftime("%Y-%m-%dT%H:%M:%S")
+```
+
+### 7.5 验证
+
+修复前（日志）：
+```
+17:06:10 [telegram_push] job finished: sent=1 elapsed=122.7s
+17:08:55 [telegram_push] job finished: sent=1 elapsed=108.0s
+17:10:53 [telegram_push] job finished: sent=1 elapsed=106.3s
+```
+
+修复后：
+```
+17:18:44 [telegram_push] job finished: sent=0 elapsed=106.8s  ← 不再重复推送
+```
+
+**状态**: ✅ 已修复

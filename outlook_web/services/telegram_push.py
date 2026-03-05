@@ -144,6 +144,8 @@ def _fetch_new_emails_imap(account: dict, since: str) -> List[dict]:
                     from email.utils import parsedate_to_datetime
 
                     received_dt = parsedate_to_datetime(date_str)
+                    if received_dt.tzinfo is not None:
+                        received_dt = received_dt.astimezone(timezone.utc)
                     received_iso = received_dt.strftime("%Y-%m-%dT%H:%M:%S")
                 except Exception:
                     received_iso = date_str
