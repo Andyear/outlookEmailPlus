@@ -33,6 +33,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             accounts,
             audit,
             emails,
+            external_pool,
             groups,
             oauth,
             pages,
@@ -133,6 +134,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         app.register_blueprint(system.create_blueprint())
         app.register_blueprint(audit.create_blueprint())
         app.register_blueprint(pool.create_blueprint())
+        app.register_blueprint(external_pool.create_blueprint())
 
         # 打印初始化信息
         print("=" * 60)
