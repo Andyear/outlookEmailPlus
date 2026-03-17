@@ -272,10 +272,9 @@ def get_stats(conn: sqlite3.Connection) -> dict:
         "cooldown": 0,
         "frozen": 0,
         "retired": 0,
-        "not_in_pool": 0,
     }
     for row in rows:
-        key = row["pool_status"] if row["pool_status"] is not None else "not_in_pool"
+        key = row["pool_status"]
         if key in pool_counts:
             pool_counts[key] = row["cnt"]
 

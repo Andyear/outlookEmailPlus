@@ -161,6 +161,30 @@ class ExternalPoolApiTests(unittest.TestCase):
         self.assertIn("claim_token", payload)
         self.assertIn("lease_expires_at", payload)
 
+    def test_external_pool_post_does_not_require_csrf(self):
+        client = self.app.test_client()
+        self._set_external_api_key("abc123")
+        with self.app.app_context():
+            from outlook_web.repositories import settings as settings_repo
+
+            settings_repo.set_setting("pool_external_enabled", "true")
+        self._insert_pool_account(provider="outlook")
+
+        resp = client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "csrf-free-worker",
+                "task_id": "csrf-free-task",
+                "provider": "outlook",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("code"), "OK")
+
     def test_external_pool_claim_release_caller_mismatch(self):
         client = self.app.test_client()
         self._set_external_api_key("abc123")
@@ -254,7 +278,11 @@ class ExternalPoolApiTests(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data.get("success"))
         self.assertEqual(data.get("code"), "OK")
-        self.assertIn("pool_counts", data.get("data", {}))
+        pool_counts = data.get("data", {}).get("pool_counts", {})
+        self.assertEqual(
+            set(pool_counts.keys()),
+            {"available", "claimed", "used", "cooldown", "frozen", "retired"},
+        )
 
     def test_external_pool_stats_returns_feature_disabled_when_switch_off(self):
         client = self.app.test_client()
