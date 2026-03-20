@@ -1,16 +1,18 @@
-# Registration Worker Integration and Mail Pool API
+# Registration Worker Integration and External Mail Pool API
 
 [中文文档](./注册与邮箱池接口文档.md) | [English Version](./registration-mail-pool-api.en.md)
 
 ## Overview
 
-This document describes the public APIs of the mail pool management system for registration workers and script-based integrations.
+This document describes the externally exposed mail-pool APIs for registration workers and script-based integrations.
 
-**Service purpose**: provide mailbox claiming, result callbacks, and pool management capabilities for registration workflows.
+**Service purpose**: provide controlled mailbox claiming, result callbacks, and pool status visibility for registration workflows.
 
 **Data format**: all requests and responses use JSON.
 
 **CORS**: cross-origin requests are supported.
+
+**Current contract**: only `/api/external/pool/*` is available in the current version. The old anonymous `/api/pool/*` endpoints have been removed.
 
 ---
 
@@ -21,10 +23,26 @@ This document describes the public APIs of the mail pool management system for r
 Contact the system administrator to obtain an API key and send it in the request header:
 
 ```text
-Authorization: Bearer YOUR_API_KEY
+X-API-Key: YOUR_API_KEY
 ```
 
 **Test environment**: contact the administrator for a test key. Rate limit: 100 requests per minute.
+
+### Preconditions
+
+Before calling the APIs, confirm all of the following:
+
+1. `pool_external_enabled=true` is enabled on the server
+2. Your API key is enabled and has `pool_access=true`
+3. If public mode is enabled, your caller must also satisfy the IP whitelist, feature switches, and rate limits
+
+### Calling Model
+
+- These are service-to-service APIs
+- No browser login session is required
+- No cookies are required
+- No CSRF token is required
+- All requests use `X-API-Key`
 
 ### Standard Response Format
 
@@ -43,7 +61,7 @@ Failure response:
 ```json
 {
   "success": false,
-  "error": "error_code",
+  "code": "ERROR_CODE",
   "message": "Error description"
 }
 ```
@@ -58,14 +76,14 @@ All time fields use ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`
 
 ### Quick Start
 
-Registration worker integrations only need to focus on these three core endpoints:
+Registration worker integrations usually only need these four endpoints:
 
 | Endpoint | Purpose | Required |
 | --- | --- | --- |
-| `POST /api/pool/claim-random` | Claim a mailbox | Yes |
-| `POST /api/pool/claim-complete` | Submit task completion | Yes |
-| `POST /api/pool/claim-release` | Release a mailbox | Yes |
-| `GET /api/pool/stats` | View pool status | Optional |
+| `POST /api/external/pool/claim-random` | Claim a mailbox | Yes |
+| `POST /api/external/pool/claim-complete` | Submit task completion | Yes |
+| `POST /api/external/pool/claim-release` | Release a mailbox | Yes |
+| `GET /api/external/pool/stats` | View pool status | Optional |
 
 ---
 
@@ -74,15 +92,15 @@ Registration worker integrations only need to focus on these three core endpoint
 ### Basics
 
 ```text
-POST /api/pool/claim-random
+POST /api/external/pool/claim-random
 Authentication required: Yes
 ```
 
 ### Request Example
 
 ```bash
-curl -X POST https://api.example.com/api/pool/claim-random \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://api.example.com/api/external/pool/claim-random \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "caller_id": "register-worker-1",
@@ -98,6 +116,12 @@ curl -X POST https://api.example.com/api/pool/claim-random \
 | `caller_id` | string | Yes | Caller identifier. Use a stable business or machine identifier such as `register-worker-1` or `register-cluster-a`. |
 | `task_id` | string | Yes | Unique ID of the current registration task, such as `job-20260317-0001` or `order-928371`. |
 | `provider` | string | No | Mail provider filter. Set `outlook` to claim Outlook mailboxes only. |
+
+### Usage Recommendations
+
+- Use a stable `caller_id` to identify a worker instance, host, or node
+- Make `task_id` unique for every single job
+- If you run different task types, prefer explicit provider filtering to reduce accidental claims
 
 ### Success Response Example
 
@@ -128,7 +152,7 @@ curl -X POST https://api.example.com/api/pool/claim-random \
 ```json
 {
   "success": false,
-  "error": "no_available_account",
+  "code": "NO_AVAILABLE_ACCOUNT",
   "message": "No eligible mailbox is currently available in the pool"
 }
 ```
@@ -140,15 +164,15 @@ curl -X POST https://api.example.com/api/pool/claim-random \
 ### Basics
 
 ```text
-POST /api/pool/claim-complete
+POST /api/external/pool/claim-complete
 Authentication required: Yes
 ```
 
 ### Request Example
 
 ```bash
-curl -X POST https://api.example.com/api/pool/claim-complete \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://api.example.com/api/external/pool/claim-complete \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "account_id": 12,
@@ -181,6 +205,12 @@ curl -X POST https://api.example.com/api/pool/claim-complete \
 | `credential_invalid` | Credentials are no longer valid | `retired` | Mailbox password or credentials are invalid |
 | `network_error` | Temporary network or infrastructure problem | `available` | Safe to return to the pool and retry quickly |
 
+### Callback Rules
+
+- Report `success` only after the task is truly finished
+- If the task is cancelled or never really starts, use `claim-release` instead of `claim-complete`
+- Do not map every failure to `network_error`, or bad mailboxes will keep going back to the pool
+
 ### Success Response Example
 
 ```json
@@ -199,8 +229,8 @@ curl -X POST https://api.example.com/api/pool/claim-complete \
 ```json
 {
   "success": false,
-  "error": "invalid_claim",
-  "message": "The claim_token is invalid or does not match account_id"
+  "code": "TOKEN_MISMATCH",
+  "message": "The claim_token does not match"
 }
 ```
 
@@ -211,15 +241,15 @@ curl -X POST https://api.example.com/api/pool/claim-complete \
 ### Basics
 
 ```text
-POST /api/pool/claim-release
+POST /api/external/pool/claim-release
 Authentication required: Yes
 ```
 
 ### Request Example
 
 ```bash
-curl -X POST https://api.example.com/api/pool/claim-release \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://api.example.com/api/external/pool/claim-release \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "account_id": 12,
@@ -240,6 +270,12 @@ curl -X POST https://api.example.com/api/pool/claim-release \
 | `task_id` | string | Yes | Must match the original claim request. |
 | `reason` | string | No | Reason for releasing the mailbox. |
 
+### Typical Release Scenarios
+
+- The job was cancelled
+- The job never actually started
+- An upstream dependency is missing and the mailbox should be returned without being counted as a failure
+
 ### Success Response Example
 
 ```json
@@ -253,6 +289,11 @@ curl -X POST https://api.example.com/api/pool/claim-release \
 }
 ```
 
+Notes:
+
+- This endpoint is for pool observation only and does not change state
+- Use it for monitoring, capacity checks, and validation, not for high-frequency polling
+
 ---
 
 ## 4. View Pool Status
@@ -260,15 +301,15 @@ curl -X POST https://api.example.com/api/pool/claim-release \
 ### Basics
 
 ```text
-GET /api/pool/stats
+GET /api/external/pool/stats
 Authentication required: Yes
 ```
 
 ### Request Example
 
 ```bash
-curl -X GET https://api.example.com/api/pool/stats \
-  -H "Authorization: Bearer YOUR_API_KEY"
+curl -X GET https://api.example.com/api/external/pool/stats \
+  -H "X-API-Key: YOUR_API_KEY"
 ```
 
 ### Success Response Example
@@ -277,13 +318,14 @@ curl -X GET https://api.example.com/api/pool/stats \
 {
   "success": true,
   "data": {
-    "total": 1000,
-    "available": 850,
-    "claimed": 120,
-    "used": 20,
-    "cooldown": 5,
-    "frozen": 3,
-    "retired": 2
+    "pool_counts": {
+      "available": 850,
+      "claimed": 120,
+      "used": 20,
+      "cooldown": 5,
+      "frozen": 3,
+      "retired": 2
+    }
   },
   "message": "Query completed successfully"
 }
@@ -312,8 +354,8 @@ curl -X GET https://api.example.com/api/pool/stats \
 ```json
 {
   "success": false,
-  "error": "missing_api_key",
-  "message": "Send Authorization: Bearer YOUR_API_KEY in the request header"
+  "code": "UNAUTHORIZED",
+  "message": "Send X-API-Key: YOUR_API_KEY in the request header"
 }
 ```
 
@@ -322,8 +364,38 @@ curl -X GET https://api.example.com/api/pool/stats \
 ```json
 {
   "success": false,
-  "error": "rate_limit_exceeded",
+  "code": "RATE_LIMIT_EXCEEDED",
   "message": "Rate limit exceeded. Please retry later"
+}
+```
+
+#### Feature Disabled
+
+```json
+{
+  "success": false,
+  "code": "FEATURE_DISABLED",
+  "message": "Feature external_pool is currently disabled"
+}
+```
+
+#### API Key Has No Pool Permission
+
+```json
+{
+  "success": false,
+  "code": "FORBIDDEN",
+  "message": "The current API key is not allowed to access the external pool"
+}
+```
+
+#### IP Not Allowed in Public Mode
+
+```json
+{
+  "success": false,
+  "code": "IP_NOT_ALLOWED",
+  "message": "The current IP is not in the allowlist"
 }
 ```
 
@@ -332,7 +404,7 @@ curl -X GET https://api.example.com/api/pool/stats \
 ```json
 {
   "success": false,
-  "error": "no_available_account",
+  "code": "NO_AVAILABLE_ACCOUNT",
   "message": "No eligible mailbox is currently available in the pool"
 }
 ```
@@ -342,8 +414,8 @@ curl -X GET https://api.example.com/api/pool/stats \
 ```json
 {
   "success": false,
-  "error": "invalid_claim",
-  "message": "The claim_token is invalid or does not match account_id"
+  "code": "TOKEN_MISMATCH",
+  "message": "The claim_token does not match"
 }
 ```
 
@@ -353,9 +425,9 @@ curl -X GET https://api.example.com/api/pool/stats \
 
 ### Rate Limits
 
-- Claim mailbox: 60 requests per minute
-- Submit result: 120 requests per minute
-- Query status: 300 requests per minute
+- Only enforced when public mode is enabled
+- Applied as a unified per-IP minute bucket across claim / release / complete / stats
+- Default limit is `60` requests per minute, and the effective value comes from `external_api_rate_limit_per_minute`
 
 ### Lease Timeout
 
@@ -364,7 +436,7 @@ After claiming a mailbox, you must submit a completion or release request before
 ### Recommended Retry Strategy
 
 - When receiving `429`, wait 1 second before retrying
-- When receiving `no_available_account`, wait 5 to 10 seconds before retrying
+- When receiving `NO_AVAILABLE_ACCOUNT`, wait 5 to 10 seconds before retrying
 - Exponential backoff is recommended
 
 ---
@@ -402,6 +474,12 @@ Status updated   Mailbox returns to pool
 
 **Solution**: check the import parameters and make sure the account was added to the pool correctly.
 
+Also check:
+
+3. Whether `pool_external_enabled` is enabled
+4. Whether the current API key has `pool_access=true`
+5. Whether the current IP is included in the allowlist when public mode is enabled
+
 ### Q2: Why do I get a parameter mismatch error during callback
 
 **Reason**: `account_id`, `claim_token`, `caller_id`, and `task_id` must exactly match the values returned by the claim operation.
@@ -423,6 +501,19 @@ Status updated   Mailbox returns to pool
 
 **Recommendation**: choose the correct `result` value based on the real failure reason.
 
+### Q5: Why can’t the old `/api/pool/*` endpoints be used anymore?
+
+**Reason**: the old anonymous endpoints were removed. The current version only exposes controlled external APIs for pool operations.
+
+**Migration**:
+
+- `/api/pool/claim-random` → `/api/external/pool/claim-random`
+- `/api/pool/claim-complete` → `/api/external/pool/claim-complete`
+- `/api/pool/claim-release` → `/api/external/pool/claim-release`
+- `/api/pool/stats` → `/api/external/pool/stats`
+
+Also migrate the request header to `X-API-Key`.
+
 ---
 
 ## Contact
@@ -440,13 +531,18 @@ Status updated   Mailbox returns to pool
 
 ---
 
-## External Interface Paths
+## Migration Notes
 
-When using the controlled external API, the corresponding paths are:
+Anonymous `/api/pool/*` endpoints have been removed. Use the controlled external endpoints instead:
 
 - `/api/external/pool/claim-random`
 - `/api/external/pool/claim-complete`
 - `/api/external/pool/claim-release`
 - `/api/external/pool/stats`
 
-The business semantics are identical to the internal endpoints.
+If you still have old worker scripts, complete the following migration:
+
+1. Move the path to `/api/external/pool/*`
+2. Replace the auth header with `X-API-Key`
+3. Add handling for `403` and `429`
+4. Verify `pool_external_enabled` and `pool_access` before rollout

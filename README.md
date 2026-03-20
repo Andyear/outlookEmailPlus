@@ -129,7 +129,13 @@ EMAIL_NOTIFICATION_SMTP_TIMEOUT=15
 - [注册与邮箱池接口文档](./docs/API/注册与邮箱池接口文档.md)
 - [Registration Worker and Mail Pool API](./docs/API/registration-mail-pool-api.en.md)
 
-如果你需要接入注册机之类的批量工作，请直接看上面的文档
+如果你需要接入注册机之类的批量工作，请直接看上面的文档。
+
+当前注册机对接统一使用受控外部邮箱池接口：
+
+- 路径：`/api/external/pool/*`
+- 鉴权头：`X-API-Key`
+- 旧匿名 `/api/pool/*` 已移除
 
 ## 感谢
 

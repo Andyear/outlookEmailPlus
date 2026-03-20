@@ -130,6 +130,12 @@ Important behavior:
 
 If you need to connect registration workers or other batch automation jobs, start with the document above.
 
+The current worker integration contract is:
+
+- Path prefix: `/api/external/pool/*`
+- Auth header: `X-API-Key`
+- The old anonymous `/api/pool/*` endpoints have been removed
+
 ## Acknowledgements
 
 This project is built on the following open-source technologies and service capabilities:
