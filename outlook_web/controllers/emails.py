@@ -1137,7 +1137,29 @@ def api_external_get_probe_status(probe_id: str) -> Any:
     """P2: 查询异步探测状态与结果"""
     try:
         result = external_api_service.get_probe_status(probe_id)
-        external_api_service.ensure_external_email_access(result.get("email") or "")
+        external_api_service.ensure_external_email_access(result.get("email") or "", allow_finished=True)
+        if result.get("status") == "cancelled":
+            external_api_service.audit_external_api_access(
+                action="external_api_access",
+                email_addr=result.get("email") or "",
+                endpoint="/api/external/probe/{probe_id}",
+                status="error",
+                details={
+                    "code": result.get("error_code") or "PROBE_CANCELLED",
+                    "probe_id": probe_id,
+                    "probe_status": result.get("status"),
+                },
+            )
+            return (
+                jsonify(
+                    external_api_service.fail(
+                        str(result.get("error_code") or "PROBE_CANCELLED"),
+                        str(result.get("error_message") or "探测因任务结束而被取消"),
+                        data=result,
+                    )
+                ),
+                409,
+            )
         external_api_service.audit_external_api_access(
             action="external_api_access",
             email_addr=result.get("email") or "",
