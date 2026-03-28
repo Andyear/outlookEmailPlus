@@ -34,6 +34,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             audit,
             emails,
             external_pool,
+            external_temp_emails,
             groups,
             oauth,
             pages,
@@ -127,12 +128,13 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         app.register_blueprint(system.create_blueprint())
         app.register_blueprint(audit.create_blueprint())
         app.register_blueprint(external_pool.create_blueprint(csrf_exempt=csrf_exempt))
+        app.register_blueprint(external_temp_emails.create_blueprint(csrf_exempt=csrf_exempt))
 
         # 打印初始化信息
         print("=" * 60)
         print("Outlook 邮件 Web 应用已初始化")
         print(f"数据库文件: {config.get_database_path()}")
-        print(f"GPTMail API: {config.get_gptmail_base_url()}")
+        print(f"Temp Mail API: {config.get_temp_mail_base_url()}")
         print("=" * 60)
 
         _APP_INSTANCE = app

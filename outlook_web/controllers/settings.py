@@ -82,6 +82,70 @@ def _coerce_int_range(raw: Any, default: int, *, minimum: int, maximum: int) -> 
     return max(minimum, min(maximum, value))
 
 
+def _parse_temp_mail_domains_input(raw: Any) -> list[dict[str, Any]]:
+    if raw in (None, "", []):
+        return []
+
+    values = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        try:
+            values = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            values = [item.strip() for item in text.replace("\r", "\n").split("\n")]
+
+    if not isinstance(values, list):
+        raise ValueError("temp_mail_domains 必须是数组")
+
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in values:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+            enabled = _parse_bool_input(item.get("enabled"), default=True)
+        else:
+            name = str(item or "").strip()
+            enabled = True
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        result.append({"name": name, "enabled": enabled})
+    return result
+
+
+def _parse_temp_mail_prefix_rules_input(raw: Any) -> dict[str, Any]:
+    if raw in (None, "", {}):
+        return {
+            "min_length": 1,
+            "max_length": 32,
+            "pattern": r"^[a-z0-9][a-z0-9._-]*$",
+        }
+
+    value = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            value = {}
+        else:
+            value = json.loads(text)
+
+    if not isinstance(value, dict):
+        raise ValueError("temp_mail_prefix_rules 必须是对象")
+
+    min_length = _coerce_int_range(value.get("min_length", 1), 1, minimum=1, maximum=64)
+    max_length = _coerce_int_range(value.get("max_length", 32), 32, minimum=min_length, maximum=128)
+    pattern = str(value.get("pattern") or r"^[a-z0-9][a-z0-9._-]*$").strip()
+    if not pattern:
+        pattern = r"^[a-z0-9][a-z0-9._-]*$"
+    return {
+        "min_length": min_length,
+        "max_length": max_length,
+        "pattern": pattern,
+    }
+
+
 def _is_valid_notification_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
 
@@ -138,7 +202,7 @@ def api_get_settings() -> Any:
 
     # 敏感字段：不返回明文/哈希，仅提供"是否已设置/脱敏展示"
     login_password_value = all_settings.get("login_password") or ""
-    gptmail_api_key_value = all_settings.get("gptmail_api_key") or ""
+    temp_mail_api_key_value = settings_repo.get_temp_mail_api_key()
     external_api_key_value = settings_repo.get_external_api_key()
     external_api_keys = external_api_keys_repo.list_external_api_keys(include_disabled=True)
     usage_summary = external_api_keys_repo.get_external_api_usage_summary(
@@ -158,8 +222,14 @@ def api_get_settings() -> Any:
         )
     safe_settings["login_password_set"] = bool(login_password_value)
     safe_settings["allow_login_password_change"] = config.get_allow_login_password_change()
-    safe_settings["gptmail_api_key_set"] = bool(gptmail_api_key_value)
-    safe_settings["gptmail_api_key_masked"] = _mask_secret_value(gptmail_api_key_value) if gptmail_api_key_value else ""
+    safe_settings["temp_mail_provider"] = settings_repo.get_temp_mail_provider()
+    safe_settings["temp_mail_provider_label"] = "temp_mail"
+    safe_settings["temp_mail_api_base_url"] = settings_repo.get_temp_mail_api_base_url()
+    safe_settings["temp_mail_api_key_set"] = bool(temp_mail_api_key_value)
+    safe_settings["temp_mail_api_key_masked"] = _mask_secret_value(temp_mail_api_key_value) if temp_mail_api_key_value else ""
+    safe_settings["temp_mail_domains"] = settings_repo.get_temp_mail_domains()
+    safe_settings["temp_mail_default_domain"] = settings_repo.get_temp_mail_default_domain()
+    safe_settings["temp_mail_prefix_rules"] = settings_repo.get_temp_mail_prefix_rules()
     safe_settings["external_api_key_set"] = bool(external_api_key_value)
     safe_settings["external_api_key_masked"] = _mask_secret_value(external_api_key_value) if external_api_key_value else ""
     safe_settings["external_api_keys"] = external_api_keys
@@ -313,19 +383,72 @@ def api_update_settings() -> Any:
                 queue_setting_update("login_password", hashed_password)
                 updated.append("登录密码")
 
-    # 更新 GPTMail API Key
+    # 更新临时邮箱配置
+    if "temp_mail_provider" in data:
+        try:
+            provider = settings_repo.validate_temp_mail_provider_name(data["temp_mail_provider"])
+        except ValueError:
+            return _json_error(
+                "TEMP_MAIL_PROVIDER_INVALID",
+                "临时邮箱 Provider 配置无效",
+                status=400,
+                message_en="Invalid temp mail provider",
+            )
+        queue_setting_update("temp_mail_provider", provider)
+        updated.append("临时邮箱 Provider")
+
+    if "temp_mail_api_base_url" in data:
+        queue_setting_update("temp_mail_api_base_url", str(data["temp_mail_api_base_url"] or "").strip())
+        updated.append("临时邮箱 API 地址")
+
+    if "temp_mail_api_key" in data:
+        new_api_key = str(data["temp_mail_api_key"] or "").strip()
+        existing_api_key = settings_repo.get_temp_mail_api_key()
+        if new_api_key and existing_api_key and new_api_key == _mask_secret_value(existing_api_key):
+            updated.append("临时邮箱 API Key（未变更）")
+        elif new_api_key:
+            queue_setting_update("temp_mail_api_key", new_api_key)
+            queue_setting_update("gptmail_api_key", new_api_key)
+            updated.append("临时邮箱 API Key")
+        else:
+            updated.append("临时邮箱 API Key（空值已忽略）")
+
+    if "temp_mail_domains" in data:
+        try:
+            domains = _parse_temp_mail_domains_input(data["temp_mail_domains"])
+            queue_setting_update("temp_mail_domains", json.dumps(domains, ensure_ascii=False))
+            updated.append("临时邮箱可用域名")
+        except ValueError as exc:
+            errors.append(str(exc))
+        except (TypeError, json.JSONDecodeError):
+            errors.append("temp_mail_domains 格式无效")
+
+    if "temp_mail_default_domain" in data:
+        queue_setting_update("temp_mail_default_domain", str(data["temp_mail_default_domain"] or "").strip())
+        updated.append("临时邮箱默认域名")
+
+    if "temp_mail_prefix_rules" in data:
+        try:
+            prefix_rules = _parse_temp_mail_prefix_rules_input(data["temp_mail_prefix_rules"])
+            queue_setting_update("temp_mail_prefix_rules", json.dumps(prefix_rules, ensure_ascii=False))
+            updated.append("临时邮箱前缀规则")
+        except ValueError as exc:
+            errors.append(str(exc))
+        except (TypeError, json.JSONDecodeError):
+            errors.append("temp_mail_prefix_rules 格式无效")
+
+    # 更新 gptmail_api_key（兼容旧字段）
     if "gptmail_api_key" in data:
         new_api_key = str(data["gptmail_api_key"] or "").strip()
-        existing_api_key = settings_repo.get_setting("gptmail_api_key", "") or ""
+        existing_api_key = settings_repo.get_temp_mail_api_key()
         if new_api_key and existing_api_key and new_api_key == _mask_secret_value(existing_api_key):
-            updated.append("GPTMail API Key（未变更）")
+            updated.append("兼容旧版临时邮箱 API Key 字段（未变更）")
         elif new_api_key:
             queue_setting_update("gptmail_api_key", new_api_key)
-            updated.append("GPTMail API Key")
+            updated.append("兼容旧版临时邮箱 API Key 字段（已更新）")
         else:
-            # 允许清空（用于禁用临时邮箱能力）
-            queue_setting_update("gptmail_api_key", "")
-            updated.append("GPTMail API Key（已清空）")
+            # legacy 字段仅做兼容，不允许空值反向清空正式 temp_mail_api_key。
+            updated.append("兼容旧版临时邮箱 API Key 字段（空值已忽略）")
 
     # 更新对外开放 API Key（建议加密存储）
     if "external_api_key" in data:
