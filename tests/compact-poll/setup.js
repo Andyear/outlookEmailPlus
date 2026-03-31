@@ -95,30 +95,27 @@ global.escapeJs = (text) => String(text == null ? '' : text)
   .replace(/>/g,  '\\u003E');
 
 // ══════════════════════════════════════════════════════════════════════════
-// 4. 方案 B：fs.readFileSync + eval 加载整个 mailbox_compact.js
-//    - 将 let/const 替换为 var，使顶层状态变量（compactPollMap 等）挂载到 global
+// 4. 方案 B：fs.readFileSync + eval 加载 poll-engine.js + mailbox_compact.js
+//    - 先加载统一轮询引擎，再加载简洁模式 UI 适配层
+//    - 将 let/const 替换为 var，使顶层状态变量挂载到 global
 //    - 使用间接 eval (0, eval)() 在全局作用域执行
 // ══════════════════════════════════════════════════════════════════════════
 
-try {
-  const filePath = path.resolve(__dirname, '../../static/js/features/mailbox_compact.js');
-  const source   = fs.readFileSync(filePath, 'utf8');
-
-  // 将文件中的 let/const 声明改为 var，以便 var 在全局 eval 后挂载到 global
-  // 注意：仅将关键字替换为 var；语义上 var 与 const/let 在函数内效果相同，
-  //       在顶层 eval 中 var 会泄漏到 global，这是我们需要的行为
-  const processedSource = source.replace(/\b(let|const)\b(\s)/g, 'var$2');
-
-  // 间接 eval：在全局作用域执行（var 声明挂载到 globalThis/global）
-  // eslint-disable-next-line no-eval
-  ;(0, eval)(processedSource);
-
-  console.log('[setup.js] mailbox_compact.js 加载成功');
-} catch (err) {
-  // RED 阶段：文件可能缺少轮询引擎代码，部分全局符号不存在
-  // 这不影响 setup.js 本身的加载；具体测试会在运行时报 ReferenceError（预期失败）
-  console.warn('[setup.js] mailbox_compact.js 加载警告（RED 阶段正常）:', err.message);
+function loadAndEval(relativePath, label) {
+  try {
+    const filePath = path.resolve(__dirname, relativePath);
+    const source   = fs.readFileSync(filePath, 'utf8');
+    const processedSource = source.replace(/\b(let|const)\b(\s)/g, 'var$2');
+    ;(0, eval)(processedSource);
+    console.log(`[setup.js] ${label} 加载成功`);
+  } catch (err) {
+    console.warn(`[setup.js] ${label} 加载警告:`, err.message);
+  }
 }
+
+// 顺序重要：先加载引擎，再加载 compact 适配层
+loadAndEval('../../static/js/features/poll-engine.js', 'poll-engine.js');
+loadAndEval('../../static/js/features/mailbox_compact.js', 'mailbox_compact.js');
 
 // ══════════════════════════════════════════════════════════════════════════
 // 5. eval 之后 override：将轮询引擎依赖的函数替换为 Mock
@@ -162,7 +159,12 @@ beforeEach(() => {
   // ── 重置全局状态变量 ──
   global.mailboxViewMode    = 'compact';
   global.isTempEmailGroup   = false;
-  global.compactPollEnabled = false;
+  // 统一引擎变量
+  global.pollEnabled    = false;
+  global.pollInterval   = 10;
+  global.pollMaxCount   = 5;
+  // 向后兼容别名（测试代码可能使用旧名称）
+  global.compactPollEnabled     = false;
   global.compactPollInterval    = 10;
   global.compactPollMaxCount    = 5;
 
@@ -172,10 +174,14 @@ beforeEach(() => {
   mockEscapeHtml.mockImplementation((text) => String(text == null ? '' : text));
 
   // ── 重置轮询状态（直接操作，不调用 clearInterval 避免 fake/real timer 混用问题）──
-  if (typeof compactPollMap !== 'undefined') {
+  if (typeof pollMap !== 'undefined') {
+    pollMap.clear();
+  }
+  if (typeof compactPollMap !== 'undefined' && compactPollMap !== pollMap) {
     compactPollMap.clear();
   }
-  // compactPollCountdownTimer 是全局 var，直接重置为 null
+  // pollCountdownTimer 和 compactPollCountdownTimer 重置为 null
+  global.pollCountdownTimer = null;
   global.compactPollCountdownTimer = null;
 });
 
@@ -187,8 +193,12 @@ afterEach(() => {
   document.body.innerHTML = '';
 
   // 清理剩余轮询状态（防止测试间泄漏）
-  if (typeof compactPollMap !== 'undefined') {
+  if (typeof pollMap !== 'undefined') {
+    pollMap.clear();
+  }
+  if (typeof compactPollMap !== 'undefined' && compactPollMap !== pollMap) {
     compactPollMap.clear();
   }
+  global.pollCountdownTimer = null;
   global.compactPollCountdownTimer = null;
 });

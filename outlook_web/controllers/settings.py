@@ -206,7 +206,7 @@ def api_get_settings() -> Any:
         == "true",
         "polling_interval": int(all_settings.get("polling_interval", "10")),
         "polling_count": int(all_settings.get("polling_count", "5")),
-        # 简洁模式自动轮询配置
+        # [Phase 3 deprecated] 简洁模式自动轮询配置 — 保留读取，向后兼容
         "enable_compact_auto_poll": all_settings.get(
             "enable_compact_auto_poll", "false"
         )
@@ -839,8 +839,8 @@ def api_update_settings() -> Any:
     if "polling_interval" in data:
         try:
             interval = int(data["polling_interval"])
-            if interval < 5 or interval > 300:
-                errors.append("轮询间隔必须在 5-300 秒之间")
+            if interval < 3 or interval > 300:
+                errors.append("轮询间隔必须在 3-300 秒之间")
             else:
                 queue_setting_update("polling_interval", str(interval))
                 updated.append("轮询间隔")
@@ -858,7 +858,7 @@ def api_update_settings() -> Any:
         except ValueError:
             errors.append("轮询次数必须是数字")
 
-    # 简洁模式自动轮询配置
+    # [Phase 3 deprecated] 简洁模式自动轮询配置 — 保留写入，向后兼容
     if "enable_compact_auto_poll" in data:
         enable_compact = str(data["enable_compact_auto_poll"]).lower()
         if enable_compact in ("true", "false"):

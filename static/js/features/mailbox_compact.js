@@ -314,48 +314,18 @@
             renderCompactAccountList(getCompactVisibleAccounts());
         });
 
-        // ==================== 简洁模式自动轮询引擎 ====================
+        // ==================== 简洁模式轮询 UI 适配层 ====================
+        //
+        // 核心轮询引擎已迁移至 poll-engine.js。
+        // 本文件保留简洁模式特有的 DOM 查找、UI 更新和事件监听。
 
-        // Toast 持续时长常量（5 秒，比普通 toast 更长）
-        var COMPACT_POLL_TOAST_DURATION = 5000;
+        // ── 向后兼容别名（测试和 main.js 可能引用旧名称） ──
+        var COMPACT_POLL_TOAST_DURATION   = typeof POLL_TOAST_DURATION !== 'undefined' ? POLL_TOAST_DURATION : 5000;
+        var COMPACT_POLL_INITIAL_DELAY_MS = typeof POLL_INITIAL_DELAY_MS !== 'undefined' ? POLL_INITIAL_DELAY_MS : 150;
+        var compactPollMap                = typeof pollMap !== 'undefined' ? pollMap : new Map();
+        var compactPollCountdownTimer     = null; // 仅供测试 setup.js 重置用
 
-        // baseline 完成后首次 poll 的延迟（ms）：需大于测试中单次 advanceTimersByTimeAsync 窗口
-        var COMPACT_POLL_INITIAL_DELAY_MS = 150;
-
-        // Map 实例，key = email -> state
-        var compactPollMap = new Map();
-
-        // 全局轮询计数检查定时器（每秒更新 UI 并检测次数上限）
-        var compactPollCountdownTimer = null;
-
-        // ── 内部辅助函数 ──────────────────────────────────────────────
-
-        /** 翻译文本；若 translateCompactText 未定义则原样返回 */
-        function compactT(key) {
-            return typeof translateCompactText === 'function' ? translateCompactText(key) : key;
-        }
-
-        /** 记录一次 poll 失败，连续 3 次后自动停止轮询 */
-        function _handlePollError(email, state) {
-            state.isPolling = false;
-            if (!compactPollMap.has(email)) return;
-            state.pollCount = (state.pollCount || 0) + 1;
-            state.errorCount = (state.errorCount || 0) + 1;
-            if (state.errorCount >= 3) {
-                stopCompactAutoPoll(email, compactT('拉取失败，已停止监听'), 'info');
-            }
-        }
-
-        /** 发现新邮件但无法提取验证码时：显示 toast 并停止轮询 */
-        function _notifyNewEmailAndStop(email, state) {
-            state.isPolling = false;
-            if (typeof showToast === 'function') {
-                showToast(compactT('发现新邮件'), 'success', null, COMPACT_POLL_TOAST_DURATION);
-            }
-            stopCompactAutoPoll(email, null);
-        }
-
-        // ── DOM 操作 ──────────────────────────────────────────────────
+        // ── 简洁模式 DOM 操作 ──
 
         function findCompactAccountRow(email) {
             if (!email) return null;
@@ -363,9 +333,7 @@
                 var esc = String(email).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
                 var el = document.querySelector('.mail-row[data-email="' + esc + '"]');
                 if (el) return el;
-            } catch (e) {
-                // 回退到遍历匹配
-            }
+            } catch (e) {}
             var rows = document.querySelectorAll('.mail-row');
             for (var i = 0; i < rows.length; i++) {
                 if (rows[i].getAttribute && rows[i].getAttribute('data-email') === email) return rows[i];
@@ -379,7 +347,6 @@
             var pull = row.querySelector('.pull-button');
             var card = row.querySelector('.mail-card');
 
-            // 移除旧圆点
             var oldDot = card ? card.querySelector('.compact-poll-dot') : null;
             if (oldDot) oldDot.remove();
 
@@ -392,13 +359,15 @@
                 if (pull) {
                     pull.classList.add('compact-poll-active');
                     pull.setAttribute('data-poll-email', email);
-                    pull.textContent = compactT('停止监听') + ' ' + (Number(remainingSeconds) || 0) + 's';
+                    var tFn = typeof translateCompactText === 'function' ? translateCompactText : function(k) { return k; };
+                    pull.textContent = tFn('停止监听') + ' ' + (Number(remainingSeconds) || 0) + 's';
                 }
             } else if (status === 'stopped') {
                 if (pull) {
                     pull.classList.remove('compact-poll-active');
                     pull.removeAttribute('data-poll-email');
-                    pull.textContent = compactT('拉取');
+                    var tFn2 = typeof translateCompactText === 'function' ? translateCompactText : function(k) { return k; };
+                    pull.textContent = tFn2('拉取');
                 }
             }
         }
@@ -411,7 +380,8 @@
             var codeBtn = row.querySelector('.code-button');
             if (codeBtn && summary.latest_verification_code !== undefined) {
                 var code = summary.latest_verification_code || '';
-                codeBtn.textContent = code || compactT('暂无');
+                var tFn = typeof translateCompactText === 'function' ? translateCompactText : function(k) { return k; };
+                codeBtn.textContent = code || tFn('暂无');
                 if (code) codeBtn.classList.remove('empty'); else codeBtn.classList.add('empty');
             }
 
@@ -423,312 +393,103 @@
             }
             if (snippetMeta) {
                 var meta = [summary.latest_email_from || '', summary.latest_email_folder || '', summary.latest_email_received_at || ''].filter(Boolean).join(' · ');
-                snippetMeta.textContent = meta || compactT('暂无邮件摘要');
+                var tFn2 = typeof translateCompactText === 'function' ? translateCompactText : function(k) { return k; };
+                snippetMeta.textContent = meta || tFn2('暂无邮件摘要');
                 snippetMeta.title = meta;
             }
         }
 
         function reapplyAllCompactPollUI() {
-            compactPollMap.forEach(function(state, email) {
+            if (typeof pollMap === 'undefined') return;
+            pollMap.forEach(function(state, email) {
                 if (!state) return;
                 var remaining = state.maxCount > 0 ? Math.max(0, state.maxCount - state.pollCount) : 0;
                 updateCompactPollUI(email, 'polling', remaining);
             });
         }
 
-        // ── 轮询生命周期 ───────────────────────────────────────────────
+        // ── 注册统一 UI 回调到统一引擎（支持标准模式和简洁模式） ──
+
+        if (typeof registerPollUICallbacks === 'function') {
+            registerPollUICallbacks({
+                onPollStart: function(email, maxCount) {
+                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
+                    if (view === 'compact') {
+                        updateCompactPollUI(email, 'polling', maxCount);
+                    } else {
+                        if (typeof showStandardPollDot === 'function') showStandardPollDot(email);
+                    }
+                },
+                onPollStop: function(email) {
+                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
+                    if (view === 'compact') {
+                        updateCompactPollUI(email, 'stopped', null);
+                    } else {
+                        if (typeof hideStandardPollDot === 'function') hideStandardPollDot(email);
+                    }
+                },
+                onPollTick: function(email, remainingCount) {
+                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
+                    if (view === 'compact') {
+                        updateCompactPollUI(email, 'polling', remainingCount);
+                    }
+                    // 标准模式不需要倒计时文字
+                },
+                onNewEmail: function(email, summary) {
+                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
+                    if (view === 'compact') {
+                        updateSingleRowFromCache(email, summary);
+                    }
+                    // 标准模式：引擎已自动处理验证码提取+复制
+                },
+                onAccountCheck: function(email) {
+                    var accounts = typeof getCompactVisibleAccounts === 'function' ? getCompactVisibleAccounts() : [];
+                    if (!accounts.some(function(a) { return a.email === email; })) return false;
+                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
+                    if (view === 'compact') {
+                        // DOM 检查（软检查：找不到只跳过，不停止）
+                        return !!findCompactAccountRow(email);
+                    }
+                    // 标准模式：账号存在于缓存即可，不需要 DOM 检查
+                    return true;
+                }
+            });
+        }
+
+        // ── 向后兼容函数别名（供 main.js 和旧代码调用） ──
+
+        function startCompactAutoPoll(email, opts) {
+            if (typeof startPoll === 'function') return startPoll(email, opts);
+        }
 
         function stopCompactAutoPoll(email, toastMsg, toastType) {
-            var state = compactPollMap.get(email);
-            if (!state) return;
-            if (state.timer) {
-                clearInterval(state.timer);
-                state.timer = null;
-            }
-            if (state.countdownTimer) {
-                clearTimeout(state.countdownTimer);
-                state.countdownTimer = null;
-            }
-            compactPollMap.delete(email);
-
-            if (toastMsg !== null && toastMsg !== undefined) {
-                if (typeof showToast === 'function') {
-                    showToast(toastMsg, toastType || 'info', null, COMPACT_POLL_TOAST_DURATION);
-                }
-            }
-
-            updateCompactPollUI(email, 'stopped', null);
+            if (typeof stopPoll === 'function') return stopPoll(email, toastMsg, toastType);
         }
 
         function stopAllCompactAutoPolls() {
-            var keys = [];
-            compactPollMap.forEach(function(s, e) { keys.push(e); });
-            keys.forEach(function(email) { stopCompactAutoPoll(email, null); });
-            if (compactPollCountdownTimer) {
-                clearInterval(compactPollCountdownTimer);
-                compactPollCountdownTimer = null;
-            }
-        }
-
-        function startGlobalCountdown() {
-            if (compactPollCountdownTimer) return;
-            compactPollCountdownTimer = setInterval(function() {
-                if (compactPollMap.size === 0) {
-                    clearInterval(compactPollCountdownTimer);
-                    compactPollCountdownTimer = null;
-                    return;
-                }
-                compactPollMap.forEach(function(state, email) {
-                    if (!state) return;
-                    // maxCount > 0 表示有次数限制；已达上限则停止
-                    if (state.maxCount > 0 && state.pollCount >= state.maxCount) {
-                        stopCompactAutoPoll(email, compactT('监听超时，未检测到新邮件'), 'info');
-                        return;
-                    }
-                    var remaining = state.maxCount > 0 ? Math.max(0, state.maxCount - state.pollCount) : 0;
-                    updateCompactPollUI(email, 'polling', remaining);
-                });
-            }, 1000);
-        }
-
-        function pollSingleEmail(email, state) {
-            if (!compactPollMap.has(email)) return;
-
-            // 防重入锁：上次 poll 尚未完成时跳过本次
-            if (state.isPolling) return;
-
-            // 次数上限双重检查（全局倒计时已处理，此处兜底）
-            if (state.maxCount > 0 && state.pollCount >= state.maxCount) {
-                stopCompactAutoPoll(email, compactT('监听超时，未检测到新邮件'), 'info');
-                return;
-            }
-
-            // 账号存在性检查（优先于 DOM 检查，避免 DOM 重渲染期间误报）
-            var accounts = typeof getCompactVisibleAccounts === 'function' ? getCompactVisibleAccounts() : [];
-            if (!accounts.some(function(a) { return a.email === email; })) {
-                stopCompactAutoPoll(email, compactT('账号已被删除，已停止监听'), 'error');
-                return;
-            }
-
-            // DOM 节点检查（账号存在但 DOM 暂时不在时，只跳过本次 poll，不停止）
-            if (!findCompactAccountRow(email)) {
-                // DOM 可能正在重新渲染，跳过本次轮询等待下次
-                return;
-            }
-
-            state.isPolling = true;
-
-            // 并行拉取 inbox 和 sentitems 两个文件夹
-            Promise.allSettled([
-                fetch('/api/emails/' + encodeURIComponent(email) + '?folder=inbox'),
-                fetch('/api/emails/' + encodeURIComponent(email) + '?folder=sentitems')
-            ]).then(function(results) {
-                if (!compactPollMap.has(email)) { state.isPolling = false; return; }
-
-                // 任一 404 → 账号已删除，立刻停止
-                if (results.some(function(r) { return r.status === 'fulfilled' && r.value && r.value.status === 404; })) {
-                    state.isPolling = false;
-                    stopCompactAutoPoll(email, compactT('账号已被删除，已停止监听'), 'error');
-                    return;
-                }
-
-                // 对 ok 响应解析 JSON
-                Promise.all(results.map(function(r) {
-                    return (r.status === 'fulfilled' && r.value && r.value.ok)
-                        ? r.value.json().catch(function() { return null; })
-                        : Promise.resolve(null);
-                })).then(function(dataArray) {
-                    if (!compactPollMap.has(email)) { state.isPolling = false; return; }
-
-                    var hasSuccess = false;
-                    var allIds = new Set();
-                    var firstSummary = null;
-
-                    dataArray.forEach(function(data) {
-                        if (!data) return;
-                        hasSuccess = true;
-                        // 从 emails 对象数组（[{id:'...'}]）提取 id
-                        if (data.emails && Array.isArray(data.emails)) {
-                            data.emails.forEach(function(e) { if (e && e.id) allIds.add(e.id); });
-                        }
-                        var summary = data.account_summary || data.summary;
-                        if (summary) {
-                            if (!firstSummary) firstSummary = summary;
-                            if (typeof syncAccountSummaryToAccountCache === 'function') {
-                                syncAccountSummaryToAccountCache(email, summary);
-                            }
-                        }
-                    });
-
-                    if (!hasSuccess) {
-                        _handlePollError(email, state);
-                        return;
-                    }
-
-                    // 成功：重置错误计数，递增轮询次数，更新 UI
-                    state.errorCount = 0;
-                    state.pollCount = (state.pollCount || 0) + 1;
-                    if (firstSummary) updateSingleRowFromCache(email, firstSummary);
-
-                    // 检测新邮件（与 baseline 比对）
-                    var baseline = state.baselineIds || new Set();
-                    var hasNew = false;
-                    allIds.forEach(function(id) { if (!baseline.has(id)) hasNew = true; });
-
-                    if (!hasNew) {
-                        state.isPolling = false;
-                        return;
-                    }
-
-                    // 发现新邮件 → 尝试提取验证码
-                    fetch('/api/extract-verification?email=' + encodeURIComponent(email) + '&latest=1')
-                        .then(function(r) { return r.ok ? r.json() : null; })
-                        .then(function(res) {
-                            if (res && res.success && res.data && res.data.verification_code) {
-                                var code = res.data.verification_code;
-                                state.isPolling = false;
-                                if (typeof copyToClipboard === 'function') copyToClipboard(code);
-                                stopCompactAutoPoll(email, compactT('检测到验证码') + '：' + code, 'success');
-                            } else {
-                                _notifyNewEmailAndStop(email, state);
-                            }
-                        })
-                        .catch(function() { _notifyNewEmailAndStop(email, state); });
-
-                }).catch(function() { _handlePollError(email, state); });
-
-            }).catch(function() { _handlePollError(email, state); });
-        }
-
-        function startCompactAutoPoll(email, opts) {
-            if (!email) return;
-
-            // 若已有轮询，先停止（不显示 toast）再重新开始
-            if (compactPollMap.has(email)) {
-                stopCompactAutoPoll(email, null);
-            }
-
-            var intervalSec = (opts && opts.interval) || (typeof compactPollInterval !== 'undefined' ? compactPollInterval : 10);
-            var maxCount     = (opts && opts.maxCount  !== undefined ? opts.maxCount  : undefined);
-            if (maxCount === undefined) maxCount = (typeof compactPollMaxCount !== 'undefined' ? compactPollMaxCount : 5);
-
-            var state = {
-                timer:       null,
-                startTime:   Date.now(),
-                baselineIds: new Set(),
-                errorCount:  0,
-                pollCount:   0,
-                isPolling:   false,
-                intervalSec: intervalSec,
-                maxCount:    maxCount,
-                countdownTimer: null
-            };
-
-            // 先写入 Map，让 baseline 异步期间条目也存在
-            compactPollMap.set(email, state);
-
-            // 异步构建 baseline：并行拉取 inbox 和 sentitems
-            Promise.allSettled([
-                fetch('/api/emails/' + encodeURIComponent(email) + '?folder=inbox'),
-                fetch('/api/emails/' + encodeURIComponent(email) + '?folder=sentitems')
-            ]).then(function(results) {
-                results.forEach(function(r) {
-                    if (r.status === 'fulfilled' && r.value && r.value.ok) {
-                        r.value.json().then(function(payload) {
-                            if (payload && payload.emails && Array.isArray(payload.emails)) {
-                                payload.emails.forEach(function(e) { if (e && e.id) state.baselineIds.add(e.id); });
-                            }
-                            if (payload && payload.account_summary && typeof syncAccountSummaryToAccountCache === 'function') {
-                                syncAccountSummaryToAccountCache(email, payload.account_summary);
-                            }
-                        }).catch(function() {});
-                    }
-                });
-
-                if (!compactPollMap.has(email)) return; // baseline 期间被停止
-
-                // 启动定时轮询
-                state.timer = setInterval(function() { pollSingleEmail(email, state); }, state.intervalSec * 1000);
-
-                // 更新 UI 为监听中（显示剩余次数）
-                updateCompactPollUI(email, 'polling', state.maxCount);
-                startGlobalCountdown();
-
-                // baseline 完成后立即执行一次 poll（延迟 COMPACT_POLL_INITIAL_DELAY_MS 保证
-                // 在 fake-timer 的下一个 advance 窗口执行，满足测试时序）
-                setTimeout(function() {
-                    if (compactPollMap.has(email)) pollSingleEmail(email, state);
-                }, COMPACT_POLL_INITIAL_DELAY_MS);
-            });
+            if (typeof stopAllPolls === 'function') return stopAllPolls();
         }
 
         function applyCompactPollSettingsToRunningPolls(newSettings) {
-            if (!newSettings) return;
-            var ni = newSettings.interval;
-            var nm = newSettings.maxCount;
-            compactPollMap.forEach(function(state, email) {
-                if (!state) return;
-                if (ni && ni !== state.intervalSec) {
-                    if (state.timer) clearInterval(state.timer);
-                    state.intervalSec = ni;
-                    state.timer = setInterval(function() { pollSingleEmail(email, state); }, ni * 1000);
-                }
-                if (nm !== undefined && nm !== null) state.maxCount = nm;
-            });
+            if (typeof applyPollSettingsToRunning === 'function') return applyPollSettingsToRunning(newSettings);
         }
 
         function applyCompactPollSettings(settings) {
-            if (!settings) return;
-            if (typeof compactPollEnabled !== 'undefined')  compactPollEnabled  = settings.enabled !== undefined ? settings.enabled : compactPollEnabled;
-            if (typeof compactPollInterval !== 'undefined') compactPollInterval = settings.interval  || compactPollInterval;
-            if (typeof compactPollMaxCount !== 'undefined') compactPollMaxCount = settings.maxCount  !== undefined ? settings.maxCount : compactPollMaxCount;
-            if (settings.enabled === false) {
-                stopAllCompactAutoPolls();
-                return;
-            }
-            applyCompactPollSettingsToRunningPolls(settings);
+            if (typeof applyPollSettings === 'function') return applyPollSettings(settings);
         }
 
-        // 监听 email-copied（必须在 window 上）
+        // ── 统一事件监听（标准模式和简洁模式共用） ──
+
         window.addEventListener('email-copied', function(e) {
             var email = e && e.detail && e.detail.email;
             if (!email) return;
-            var enabled = typeof compactPollEnabled !== 'undefined' ? compactPollEnabled : false;
+            var enabled = typeof pollEnabled !== 'undefined' ? pollEnabled : false;
             if (!enabled) return;
-            var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : '';
-            if (view !== 'compact') return;
+            // 不限制视图模式：标准模式和简洁模式均触发轮询
             var isTemp = typeof isTempEmailGroup !== 'undefined' ? isTempEmailGroup : false;
             if (isTemp) return;
             var accounts = typeof getCompactVisibleAccounts === 'function' ? getCompactVisibleAccounts() : [];
             var found = accounts.some(function(a) { return a.email === email; });
             if (!found) return;
-            startCompactAutoPoll(email);
-        });
-
-        // visibilitychange 监听（document）
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                // 切入后台：暂停所有轮询 timer（保留 Map 条目），停止倒计时
-                compactPollMap.forEach(function(state) {
-                    if (state && state.timer) {
-                        clearInterval(state.timer);
-                        state.timer = null;
-                    }
-                });
-                if (compactPollCountdownTimer) {
-                    clearInterval(compactPollCountdownTimer);
-                    compactPollCountdownTimer = null;
-                }
-            } else {
-                // 切回前台：为每个条目重建 timer
-                compactPollMap.forEach(function(state, email) {
-                    if (state && !state.timer) {
-                        state.timer = setInterval(function() { pollSingleEmail(email, state); }, state.intervalSec * 1000);
-                    }
-                });
-                if (compactPollMap.size > 0) {
-                    startGlobalCountdown();
-                    reapplyAllCompactPollUI();
-                }
-            }
+            if (typeof startPoll === 'function') startPoll(email);
         });

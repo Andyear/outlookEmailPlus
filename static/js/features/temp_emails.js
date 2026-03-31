@@ -5,7 +5,7 @@
 
         // BUG-05: 快速切换临时邮箱/从普通邮箱切换到临时邮箱时，旧请求与轮询可能污染当前 UI。
         // - tempEmailMessagesRequestSeq / tempEmailDetailRequestSeq 用于丢弃过期请求的响应（stale guard）。
-        // - selectTempEmail 主动 stopPolling，避免普通邮箱轮询继续跑 /api/emails 导致报错与串号。
+        // - selectTempEmail 主动 stopAllPolls，避免轮询继续跑 /api/emails 导致报错与串号。
         let tempEmailMessagesRequestSeq = 0;
         let tempEmailDetailRequestSeq = 0;
 
@@ -256,9 +256,9 @@
 
         // 选择临时邮箱
         function selectTempEmail(email) {
-            // BUG-05: 与普通邮箱一致，切换前先停轮询，避免轮询把 currentAccount 误当作普通邮箱去拉取。
-            if (typeof stopPolling === 'function') {
-                stopPolling(true);
+            // BUG-05: 切换到临时邮箱前停止所有轮询，避免轮询把 currentAccount 误当作普通邮箱去拉取。
+            if (typeof stopAllPolls === 'function') {
+                stopAllPolls();
             }
 
             currentAccount = email;

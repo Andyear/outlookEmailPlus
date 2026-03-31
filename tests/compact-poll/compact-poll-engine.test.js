@@ -76,9 +76,9 @@ function createMockMailRow(email, accountId) {
 describe('TC-C01~C05: 事件触发与守卫条件', () => {
 
   // ── TC-C01 ──────────────────────────────────────────────────────────────
-  test('TC-C01: compactPollEnabled=false 时 email-copied 事件不触发轮询', () => {
+  test('TC-C01: pollEnabled=false 时 email-copied 事件不触发轮询', () => {
     // 功能开关关闭
-    compactPollEnabled = false;
+    pollEnabled = false;
     createMockMailRow('test@example.com', 1);
 
     window.dispatchEvent(new CustomEvent('email-copied', {
@@ -86,14 +86,14 @@ describe('TC-C01~C05: 事件触发与守卫条件', () => {
     }));
 
     // Map 应保持空
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
   // ── TC-C02 ──────────────────────────────────────────────────────────────
-  test('TC-C02: compactPollEnabled=true + compact 模式时 email-copied 触发轮询', async () => {
-    compactPollEnabled    = true;
-    compactPollInterval   = 10;
-    compactPollMaxCount    = 5;
+  test('TC-C02: pollEnabled=true + compact 模式时 email-copied 触发轮询', async () => {
+    pollEnabled    = true;
+    pollInterval   = 10;
+    pollMaxCount    = 5;
 
     // 返回包含目标邮箱的账号列表
     getCompactVisibleAccounts.mockReturnValue([
@@ -115,14 +115,14 @@ describe('TC-C01~C05: 事件触发与守卫条件', () => {
     await jest.advanceTimersByTimeAsync(200);
 
     // 轮询条目应已创建
-    expect(compactPollMap.has('test@example.com')).toBe(true);
+    expect(pollMap.has('test@example.com')).toBe(true);
     // 初次 pollSingleEmail 执行完毕，isPolling 应恢复 false
-    expect(compactPollMap.get('test@example.com').isPolling).toBe(false);
+    expect(pollMap.get('test@example.com').isPolling).toBe(false);
   });
 
   // ── TC-C03 ──────────────────────────────────────────────────────────────
   test('TC-C03: mailboxViewMode 非 compact 时不触发轮询', () => {
-    compactPollEnabled  = true;
+    pollEnabled  = true;
     // 切换到标准模式
     global.mailboxViewMode = 'standard';
 
@@ -130,24 +130,24 @@ describe('TC-C01~C05: 事件触发与守卫条件', () => {
       detail: { email: 'test@example.com' }
     }));
 
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
   // ── TC-C04 ──────────────────────────────────────────────────────────────
   test('TC-C04: isTempEmailGroup=true 时不触发轮询', () => {
-    compactPollEnabled       = true;
+    pollEnabled       = true;
     global.isTempEmailGroup  = true;
 
     window.dispatchEvent(new CustomEvent('email-copied', {
       detail: { email: 'test@example.com' }
     }));
 
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
   // ── TC-C05 ──────────────────────────────────────────────────────────────
   test('TC-C05: 邮箱不在 getCompactVisibleAccounts 返回列表中时不触发轮询', () => {
-    compactPollEnabled = true;
+    pollEnabled = true;
     // 返回空列表 => 找不到账号
     getCompactVisibleAccounts.mockReturnValue([]);
 
@@ -155,7 +155,7 @@ describe('TC-C01~C05: 事件触发与守卫条件', () => {
       detail: { email: 'unknown@example.com' }
     }));
 
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
 }); // end describe TC-C01~C05
@@ -168,9 +168,9 @@ describe('TC-C06~C09: 轮询状态管理', () => {
 
   // ── TC-C06 ──────────────────────────────────────────────────────────────
   test('TC-C06: 同一邮箱再次 email-copied 应重置轮询（startTime 更新）', async () => {
-    compactPollEnabled    = true;
-    compactPollInterval   = 10;
-    compactPollMaxCount = 5;
+    pollEnabled    = true;
+    pollInterval   = 10;
+    pollMaxCount = 5;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -188,7 +188,7 @@ describe('TC-C06~C09: 轮询状态管理', () => {
     }));
     await jest.advanceTimersByTimeAsync(200);
 
-    const firstStartTime = compactPollMap.get('test@example.com').startTime;
+    const firstStartTime = pollMap.get('test@example.com').startTime;
 
     // 等待一段时间后再次触发
     await jest.advanceTimersByTimeAsync(5000);
@@ -198,7 +198,7 @@ describe('TC-C06~C09: 轮询状态管理', () => {
     }));
     await jest.advanceTimersByTimeAsync(200);
 
-    const secondStartTime = compactPollMap.get('test@example.com').startTime;
+    const secondStartTime = pollMap.get('test@example.com').startTime;
 
     // startTime 应被更新（第二次大于第一次）
     expect(secondStartTime).toBeGreaterThan(firstStartTime);
@@ -206,7 +206,7 @@ describe('TC-C06~C09: 轮询状态管理', () => {
 
   // ── TC-C07 ──────────────────────────────────────────────────────────────
   test('TC-C07: 多邮箱并行触发应产生多个 Map 条目', async () => {
-    compactPollEnabled = true;
+    pollEnabled = true;
 
     const accounts = [
       { email: 'a@example.com', id: 1 },
@@ -228,15 +228,15 @@ describe('TC-C06~C09: 轮询状态管理', () => {
     }
     await jest.advanceTimersByTimeAsync(200);
 
-    expect(compactPollMap.size).toBe(3);
-    expect(compactPollMap.has('a@example.com')).toBe(true);
-    expect(compactPollMap.has('b@example.com')).toBe(true);
-    expect(compactPollMap.has('c@example.com')).toBe(true);
+    expect(pollMap.size).toBe(3);
+    expect(pollMap.has('a@example.com')).toBe(true);
+    expect(pollMap.has('b@example.com')).toBe(true);
+    expect(pollMap.has('c@example.com')).toBe(true);
   });
 
   // ── TC-C08 ──────────────────────────────────────────────────────────────
-  test('TC-C08: stopCompactAutoPoll 应从 Map 删除条目并恢复按钮 UI', async () => {
-    compactPollEnabled = true;
+  test('TC-C08: stopPoll 应从 Map 删除条目并恢复按钮 UI', async () => {
+    pollEnabled = true;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -253,12 +253,12 @@ describe('TC-C06~C09: 轮询状态管理', () => {
     }));
     await jest.advanceTimersByTimeAsync(200);
 
-    expect(compactPollMap.has('test@example.com')).toBe(true);
+    expect(pollMap.has('test@example.com')).toBe(true);
 
     // 手动停止轮询（silent=true 不显示 Toast）
-    stopCompactAutoPoll('test@example.com', true);
+    stopPoll('test@example.com', true);
 
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
 
     // 按钮应恢复为原始"拉取"状态
     const pullBtn = row.querySelector('.pull-button');
@@ -267,8 +267,8 @@ describe('TC-C06~C09: 轮询状态管理', () => {
   });
 
   // ── TC-C09 ──────────────────────────────────────────────────────────────
-  test('TC-C09: stopAllCompactAutoPolls 应清空所有轮询条目', async () => {
-    compactPollEnabled = true;
+  test('TC-C09: stopAllPolls 应清空所有轮询条目', async () => {
+    pollEnabled = true;
 
     const accounts = [
       { email: 'a@example.com', id: 1 },
@@ -287,11 +287,11 @@ describe('TC-C06~C09: 轮询状态管理', () => {
     }
     await jest.advanceTimersByTimeAsync(200);
 
-    expect(compactPollMap.size).toBe(2);
+    expect(pollMap.size).toBe(2);
 
-    stopAllCompactAutoPolls();
+    stopAllPolls();
 
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
 }); // end describe TC-C06~C09
@@ -304,9 +304,9 @@ describe('TC-C10~C13: 超时与错误处理', () => {
 
   // ── TC-C10 ──────────────────────────────────────────────────────────────
   test('TC-C10: 达到最多轮询次数后应自动停止轮询并显示超时 Toast', async () => {
-    compactPollEnabled   = true;
-    compactPollInterval  = 5;
-    compactPollMaxCount  = 2; // 最多 2 次，方便测试
+    pollEnabled   = true;
+    pollInterval  = 5;
+    pollMaxCount  = 2; // 最多 2 次，方便测试
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -328,7 +328,7 @@ describe('TC-C10~C13: 超时与错误处理', () => {
     // 再快进 1 秒让全局倒计时检测到 pollCount >= maxCount
     await jest.advanceTimersByTimeAsync(1000);
 
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
 
     // 应展示超时 Toast（5000ms 持续时间）
     expect(showToast).toHaveBeenCalledWith(
@@ -341,9 +341,9 @@ describe('TC-C10~C13: 超时与错误处理', () => {
 
   // ── TC-C11 ──────────────────────────────────────────────────────────────
   test('TC-C11: 连续 3 次请求失败后应自动停止轮询', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 1; // 1 秒间隔，便于快速触发多次
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 1; // 1 秒间隔，便于快速触发多次
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -364,14 +364,14 @@ describe('TC-C10~C13: 超时与错误处理', () => {
     // 第 3 次轮询（errorCount → 3 → 停止）
     await jest.advanceTimersByTimeAsync(1000);
 
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
   });
 
   // ── TC-C12 ──────────────────────────────────────────────────────────────
   test('TC-C12: 成功请求后 errorCount 应归零，轮询继续', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 1;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 1;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -408,21 +408,21 @@ describe('TC-C10~C13: 超时与错误处理', () => {
 
     // 第二次 poll（errorCount → 2）
     await jest.advanceTimersByTimeAsync(1000);
-    expect(compactPollMap.get('test@example.com').errorCount).toBe(2);
+    expect(pollMap.get('test@example.com').errorCount).toBe(2);
 
     // 第三次 poll（两个 folder 请求成功 → hasSuccess=true → errorCount 归零）
     await jest.advanceTimersByTimeAsync(1000);
-    expect(compactPollMap.get('test@example.com').errorCount).toBe(0);
+    expect(pollMap.get('test@example.com').errorCount).toBe(0);
 
     // 轮询未停止
-    expect(compactPollMap.has('test@example.com')).toBe(true);
+    expect(pollMap.has('test@example.com')).toBe(true);
   });
 
   // ── TC-C13 ──────────────────────────────────────────────────────────────
   test('TC-C13: API 返回 404 应立即停止轮询并提示账号已删除', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -452,7 +452,7 @@ describe('TC-C10~C13: 超时与错误处理', () => {
     // 首次 pollSingleEmail → 404 → 停止
     await jest.advanceTimersByTimeAsync(200);
 
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
     expect(showToast).toHaveBeenCalledWith(
       expect.stringContaining('账号已被删除'),
       'error',
@@ -471,9 +471,9 @@ describe('TC-C14: 防重入锁', () => {
 
   // ── TC-C14 ──────────────────────────────────────────────────────────────
   test('TC-C14: isPolling=true 时定时器触发的 pollSingleEmail 应跳过，fetch 不会多次调用', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 1; // 1 秒间隔
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 1; // 1 秒间隔
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -493,13 +493,13 @@ describe('TC-C14: 防重入锁', () => {
     // 等待事件处理和 baseline 启动（fetch 已调用但永未 resolve）
     await jest.advanceTimersByTimeAsync(100);
 
-    // 此时 compactPollMap 应已创建（在 baseline await 之前 set）
-    expect(compactPollMap.has('test@example.com')).toBe(true);
+    // 此时 pollMap 应已创建（在 baseline await 之前 set）
+    expect(pollMap.has('test@example.com')).toBe(true);
     // isPolling=true：pollSingleEmail 正在等待 fetch（或 baseline 中）
     // 注意：若实现先调 pollSingleEmail 再 await baseline，isPolling 为 true；
     //       若顺序相反，isPolling 此时可能为 false，GREEN 阶段视实现调整
     // 此断言检测"轮询已启动"的状态
-    const state = compactPollMap.get('test@example.com');
+    const state = pollMap.get('test@example.com');
     expect(state).not.toBeNull();
 
     // 触发定时器（1 秒后）—— 由于 isPolling=true（或 baseline 卡住），fetch 不应额外调用
@@ -521,9 +521,9 @@ describe('TC-C15~C16: 发现新邮件处理', () => {
 
   // ── TC-C15 ──────────────────────────────────────────────────────────────
   test('TC-C15: 发现新邮件后应停止轮询、提取验证码并复制到剪贴板', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([{
       email: 'test@example.com',
@@ -594,14 +594,14 @@ describe('TC-C15~C16: 发现新邮件处理', () => {
     expect(copyToClipboard).toHaveBeenCalledWith('654321');
 
     // 应停止轮询
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
   });
 
   // ── TC-C16 ──────────────────────────────────────────────────────────────
   test('TC-C16: 验证码提取失败时应显示"发现新邮件"Toast 并停止轮询', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([{
       email: 'test@example.com',
@@ -658,7 +658,7 @@ describe('TC-C15~C16: 发现新邮件处理', () => {
       5000
     );
     // 仍应停止轮询
-    expect(compactPollMap.has('test@example.com')).toBe(false);
+    expect(pollMap.has('test@example.com')).toBe(false);
   });
 
 }); // end describe TC-C15~C16
@@ -670,10 +670,10 @@ describe('TC-C15~C16: 发现新邮件处理', () => {
 describe('TC-C17~C18: 设置变更即时生效', () => {
 
   // ── TC-C17 ──────────────────────────────────────────────────────────────
-  test('TC-C17: applyCompactPollSettings({enabled:false}) 应停止所有正在运行的轮询', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+  test('TC-C17: applyPollSettings({enabled:false}) 应停止所有正在运行的轮询', async () => {
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -690,19 +690,19 @@ describe('TC-C17~C18: 设置变更即时生效', () => {
     }));
     await jest.advanceTimersByTimeAsync(200);
 
-    expect(compactPollMap.size).toBe(1);
+    expect(pollMap.size).toBe(1);
 
     // 关闭功能
-    applyCompactPollSettings({ enabled: false, interval: 10, maxCount: 5 });
+    applyPollSettings({ enabled: false, interval: 10, maxCount: 5 });
 
-    expect(compactPollMap.size).toBe(0);
+    expect(pollMap.size).toBe(0);
   });
 
   // ── TC-C18 ──────────────────────────────────────────────────────────────
-  test('TC-C18: 修改 compactPollInterval 后应重建定时器（timer handle 不同）', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+  test('TC-C18: 修改 pollInterval 后应重建定时器（timer handle 不同）', async () => {
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -719,12 +719,12 @@ describe('TC-C17~C18: 设置变更即时生效', () => {
     }));
     await jest.advanceTimersByTimeAsync(200);
 
-    const oldTimer = compactPollMap.get('test@example.com').timer;
+    const oldTimer = pollMap.get('test@example.com').timer;
 
     // 变更间隔到 5 秒
-    applyCompactPollSettings({ enabled: true, interval: 5, maxCount: 30 });
+    applyPollSettings({ enabled: true, interval: 5, maxCount: 30 });
 
-    const newTimer = compactPollMap.get('test@example.com').timer;
+    const newTimer = pollMap.get('test@example.com').timer;
 
     // 定时器 handle 应已被重建（新旧不同）
     expect(newTimer).not.toBe(oldTimer);
@@ -740,9 +740,9 @@ describe('TC-C19~C20: 页面可见性检测', () => {
 
   // ── TC-C19 ──────────────────────────────────────────────────────────────
   test('TC-C19: 页面切到后台应将所有轮询定时器清为 null（暂停）', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -760,23 +760,23 @@ describe('TC-C19~C20: 页面可见性检测', () => {
     await jest.advanceTimersByTimeAsync(200);
 
     // 确认定时器已设置
-    expect(compactPollMap.get('test@example.com').timer).not.toBeNull();
+    expect(pollMap.get('test@example.com').timer).not.toBeNull();
 
     // 模拟切到后台
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
 
     // 定时器应被清空（保留 Map 条目，仅 timer=null）
-    expect(compactPollMap.get('test@example.com').timer).toBeNull();
+    expect(pollMap.get('test@example.com').timer).toBeNull();
     // 全局倒计时也应暂停
-    expect(compactPollCountdownTimer).toBeNull();
+    expect(pollCountdownTimer).toBeNull();
   });
 
   // ── TC-C20 ──────────────────────────────────────────────────────────────
   test('TC-C20: 页面切回前台应恢复所有轮询定时器（timer 重新设置）', async () => {
-    compactPollEnabled     = true;
-    compactPollInterval    = 10;
-    compactPollMaxCount = 30;
+    pollEnabled     = true;
+    pollInterval    = 10;
+    pollMaxCount = 30;
 
     getCompactVisibleAccounts.mockReturnValue([
       { email: 'test@example.com', id: 1 }
@@ -796,7 +796,7 @@ describe('TC-C19~C20: 页面可见性检测', () => {
     // ── 切到后台 ──
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(compactPollMap.get('test@example.com').timer).toBeNull();
+    expect(pollMap.get('test@example.com').timer).toBeNull();
 
     // ── 切回前台 ──
     Object.defineProperty(document, 'hidden', { value: false, configurable: true });
@@ -804,9 +804,9 @@ describe('TC-C19~C20: 页面可见性检测', () => {
     await jest.advanceTimersByTimeAsync(100); // 等待 visible 后的立即轮询
 
     // 定时器应重新设置
-    expect(compactPollMap.get('test@example.com').timer).not.toBeNull();
+    expect(pollMap.get('test@example.com').timer).not.toBeNull();
     // 全局倒计时应恢复
-    expect(compactPollCountdownTimer).not.toBeNull();
+    expect(pollCountdownTimer).not.toBeNull();
   });
 
 }); // end describe TC-C19~C20

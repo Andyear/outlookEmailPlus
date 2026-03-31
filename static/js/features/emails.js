@@ -80,16 +80,6 @@
                     document.getElementById('emailCount').textContent = `(${data.emails.length})`;
 
                     renderEmailList(data.emails);
-
-                    // 初始化已知邮件ID集合（用于轮询检测新邮件）
-                    if (typeof knownEmailIds !== 'undefined') {
-                        knownEmailIds = new Set(currentEmails.map(e => e.id));
-                    }
-
-                    // 检查是否需要自动开始轮询
-                    if (typeof syncPollingForCurrentAccount === 'function') {
-                        syncPollingForCurrentAccount();
-                    }
                 } else {
                     // 显示详细的多方法失败弹框
                     if (data.details) {

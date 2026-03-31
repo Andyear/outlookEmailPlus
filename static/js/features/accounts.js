@@ -2,10 +2,6 @@
 
         // 选择账号
         function selectAccount(email) {
-            if (typeof stopPolling === 'function') {
-                stopPolling(true);
-            }
-
             currentAccount = email;
             isTempEmailGroup = false;
             currentFolder = 'inbox';
@@ -65,10 +61,6 @@
                 </div>
             `;
             document.getElementById('emailDetailToolbar').style.display = 'none';
-
-            if (typeof syncPollingForCurrentAccount === 'function') {
-                syncPollingForCurrentAccount({ restart: true });
-            }
         }
 
         // Provider 下拉缓存

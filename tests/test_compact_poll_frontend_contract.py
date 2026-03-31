@@ -41,15 +41,21 @@ class CompactPollFrontendContractTests(unittest.TestCase):
     # ──────────────────────────────────────────────────────
 
     def test_index_html_contains_compact_poll_settings_panel(self):
-        """index.html 应包含简洁模式独立轮询设置面板（开关 + 间隔 + 最多次数）"""
+        """[Phase 3] 简洁模式独立面板已合并到标准轮询面板，compact 独立面板不再存在"""
         client = self.app.test_client()
         self._login(client)
         html = self._get_text(client, "/")
 
-        # 独立的 compact poll 面板已恢复
-        self.assertIn('id="enableCompactAutoPoll"', html)
-        self.assertIn('id="compactPollInterval"', html)
-        self.assertIn('id="compactPollMaxCount"', html)
+        # Phase 3: compact 独立面板已删除
+        self.assertNotIn('id="enableCompactAutoPoll"', html)
+        self.assertNotIn('id="compactPollInterval"', html)
+        self.assertNotIn('id="compactPollMaxCount"', html)
+
+        # 标准轮询面板仍然存在，范围已调整为 3-300
+        self.assertIn('id="enableAutoPolling"', html)
+        self.assertIn('id="pollingInterval"', html)
+        self.assertIn('id="pollingCount"', html)
+        self.assertIn('min="3" max="300"', html)
 
     # ──────────────────────────────────────────────────────
     # TC-B02：i18n.js 包含简洁模式运行时 UI 文本（按钮文本、Toast 等）
@@ -70,24 +76,35 @@ class CompactPollFrontendContractTests(unittest.TestCase):
     # ──────────────────────────────────────────────────────
 
     def test_main_js_declares_compact_poll_variables(self):
-        """main.js 应声明 compactPollEnabled / compactPollInterval / compactPollMaxCount"""
+        """[Phase 3] compact 独立变量已废弃，main.js 只保留标准轮询变量"""
         client = self.app.test_client()
         js = self._get_text(client, "/static/js/main.js")
 
-        self.assertIn("let compactPollEnabled = false;", js)
-        self.assertIn("let compactPollInterval = 10;", js)
-        self.assertIn("let compactPollMaxCount = 5;", js)
+        # Phase 3: compact 独立变量已删除
+        self.assertNotIn("let compactPollEnabled = false;", js)
+        self.assertNotIn("let compactPollInterval = 10;", js)
+        self.assertNotIn("let compactPollMaxCount = 5;", js)
+
+        # 标准轮询变量仍然存在
+        self.assertIn("let autoPollingEnabled = false;", js)
+        self.assertIn("let maxPollingCount = 5;", js)
+        self.assertIn("let pollingInterval = 10;", js)
 
     # ──────────────────────────────────────────────────────
     # TC-B04：main.js 包含 applyCompactPollSettings 调用
     # ──────────────────────────────────────────────────────
 
     def test_main_js_calls_apply_compact_poll_settings(self):
-        """main.js 应在设置加载和保存后调用 applyCompactPollSettings"""
+        """[Phase 3] main.js 通过 applyPollingSettings 统一调用引擎的 applyPollSettings"""
         client = self.app.test_client()
         js = self._get_text(client, "/static/js/main.js")
 
-        self.assertIn("applyCompactPollSettings", js)
+        # Phase 3: 不再直接调用 applyCompactPollSettings
+        self.assertNotIn("applyCompactPollSettings", js)
+
+        # 统一通过 applyPollingSettings → applyPollSettings 路径
+        self.assertIn("applyPollingSettings", js)
+        self.assertIn("applyPollSettings", js)
 
     # ──────────────────────────────────────────────────────
     # TC-B05：emails.js 包含 email-copied 事件派发
@@ -117,16 +134,16 @@ class CompactPollFrontendContractTests(unittest.TestCase):
     # ──────────────────────────────────────────────────────
 
     def test_mailbox_compact_js_contains_core_functions(self):
-        """mailbox_compact.js 应包含轮询引擎全部核心函数"""
+        """mailbox_compact.js 应包含简洁模式 UI 函数，poll-engine.js 应包含核心引擎函数"""
         client = self.app.test_client()
-        js = self._get_text(client, "/static/js/features/mailbox_compact.js")
+        compact_js = self._get_text(client, "/static/js/features/mailbox_compact.js")
+        engine_js = self._get_text(client, "/static/js/features/poll-engine.js")
 
-        core_funcs = [
+        # 简洁模式 UI 函数（在 mailbox_compact.js 中）
+        compact_funcs = [
             "startCompactAutoPoll",
-            "pollSingleEmail",
             "stopCompactAutoPoll",
             "stopAllCompactAutoPolls",
-            "startGlobalCountdown",
             "updateSingleRowFromCache",
             "reapplyAllCompactPollUI",
             "applyCompactPollSettings",
@@ -134,11 +151,27 @@ class CompactPollFrontendContractTests(unittest.TestCase):
             "findCompactAccountRow",
             "updateCompactPollUI",
         ]
-        for func in core_funcs:
+        for func in compact_funcs:
             self.assertIn(
                 f"function {func}",
-                js,
+                compact_js,
                 f"mailbox_compact.js 缺少函数声明: {func}",
+            )
+
+        # 核心引擎函数（在 poll-engine.js 中）
+        engine_funcs = [
+            "startPoll",
+            "pollSingleEmail",
+            "stopPoll",
+            "stopAllPolls",
+            "startGlobalCountdown",
+            "applyPollSettings",
+        ]
+        for func in engine_funcs:
+            self.assertIn(
+                f"function {func}",
+                engine_js,
+                f"poll-engine.js 缺少函数声明: {func}",
             )
 
     # ──────────────────────────────────────────────────────
@@ -239,13 +272,15 @@ class CompactPollFrontendContractTests(unittest.TestCase):
         self.assertIn("5000", js)
 
     # ──────────────────────────────────────────────────────
-    # TC-B14：mailbox_compact.js 包含 visibilitychange 监听
+    # TC-B14：poll-engine.js 包含 visibilitychange 监听
+    #   注：visibilitychange 逻辑已从 mailbox_compact.js
+    #   迁移至统一轮询引擎 poll-engine.js
     # ──────────────────────────────────────────────────────
 
     def test_mailbox_compact_listens_visibility_change(self):
-        """mailbox_compact.js 应监听 visibilitychange 事件以支持后台暂停/恢复轮询"""
+        """poll-engine.js 应监听 visibilitychange 事件以支持后台暂停/恢复轮询"""
         client = self.app.test_client()
-        js = self._get_text(client, "/static/js/features/mailbox_compact.js")
+        js = self._get_text(client, "/static/js/features/poll-engine.js")
 
         self.assertIn("visibilitychange", js)
         self.assertIn("document.hidden", js)
