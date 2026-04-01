@@ -1029,6 +1029,7 @@
                 const data = await response.json();
 
                 if (data.success && data.emails.length > 0) {
+                    const prevLength = currentEmails.length;
                     // 追加新邮件到列表
                     currentEmails = currentEmails.concat(data.emails);
                     hasMoreEmails = data.has_more;
@@ -1037,8 +1038,30 @@
                     const loadingEl = document.getElementById('loadingMore');
                     if (loadingEl) loadingEl.remove();
 
-                    // 重新渲染邮件列表
-                    renderEmailList(currentEmails);
+                    // Bug #24 修复：DOM append 新邮件条目，保留已有条目的 active 状态
+                    const emailListEl = document.getElementById('emailList');
+                    const clickHandler = isTempEmailGroup ? 'getTempEmailDetail' : 'selectEmail';
+                    data.emails.forEach((email, i) => {
+                        const index = prevLength + i;
+                        const isChecked = selectedEmailIds.has(email.id);
+                        const initial = (email.from || '?')[0].toUpperCase();
+                        const div = document.createElement('div');
+                        div.className = `email-item${email.is_read === false ? ' unread' : ''}`;
+                        div.setAttribute('onclick', `${clickHandler}('${email.id}', ${index})`);
+                        div.innerHTML = `
+                            <div class="email-checkbox-wrapper" onclick="event.stopPropagation(); toggleEmailSelection('${email.id}')">
+                                <input type="checkbox" class="email-checkbox" ${isChecked ? 'checked' : ''} style="pointer-events: none;">
+                            </div>
+                            <div class="email-avatar">${initial}</div>
+                            <div class="email-meta">
+                                <div class="email-from">${escapeHtml(email.from)}</div>
+                                <div class="email-subject">${escapeHtml(email.subject || '无主题')}</div>
+                                <div class="email-preview">${escapeHtml(email.body_preview || '')}</div>
+                            </div>
+                            <div class="email-time">${formatDate(email.date)}</div>
+                        `;
+                        emailListEl.appendChild(div);
+                    });
 
                     // 更新邮件数量
                     document.getElementById('emailCount').textContent = `(${currentEmails.length})`;
