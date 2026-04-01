@@ -50,12 +50,13 @@
 
 /* ---------- Reset ---------- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 15px; scroll-behavior: smooth; }
+html { font-size: 15px; scroll-behavior: smooth; height: 100%; }
 body {
   font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   transition: background var(--transition), color var(--transition);
   line-height: 1.6;
 }
@@ -69,7 +70,7 @@ input, textarea, select { font-family: inherit; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ---------- 全局布局 ---------- */
-#app { display: flex; min-height: 100vh; }
+#app { display: flex; height: 100%; overflow: hidden; }
 
 /* ===== 登录页 ===== */
 #auth-page {
@@ -99,12 +100,12 @@ input, textarea, select { font-family: inherit; }
 .auth-logo p  { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem; }
 
 /* ===== Sidebar ===== */
-#main-layout { display: flex; flex: 1; }
+#main-layout { display: flex; flex: 1; height: 100%; overflow: hidden; }
 
 .sidebar {
-  width: var(--sidebar-w); min-height: 100vh; background: var(--bg-sidebar);
+  width: var(--sidebar-w); height: 100%; background: var(--bg-sidebar);
   display: flex; flex-direction: column; flex-shrink: 0;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  position: sticky; top: 0; overflow-y: auto;
   transition: width 0.25s ease;
 }
 .sidebar-logo {
@@ -182,7 +183,7 @@ input, textarea, select { font-family: inherit; }
 .btn-theme:hover { background: rgba(255,255,255,0.12); color: #FAEBD7; }
 
 /* ===== Content Area ===== */
-.content { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow-x: hidden; }
+.content { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; height: 100%; }
 
 .topbar {
   background: var(--bg-card); border-bottom: 1px solid var(--border);
@@ -1366,7 +1367,9 @@ tr:hover td { background: rgba(184,92,56,0.04); }
   .user-chip { justify-content: flex-start !important; }
   .btn-logout, .btn-theme { font-size: 0.78rem !important; padding: 0.45rem !important; }
 
-  .content { width: 100vw; min-width: 0; }
+  .content { width: 100vw; min-width: 0; height: auto; overflow: visible; }
+  /* 移动端恢复页面滚动 */
+  body, #app, #main-layout { height: auto; overflow: visible; }
   .topbar { padding: 0.6rem 0.85rem; gap: 0.4rem; }
   .topbar-title { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .page { padding: 0.85rem; }
