@@ -138,12 +138,15 @@
             }
 
             const clickHandler = isTempEmailGroup ? 'getTempEmailDetail' : 'selectEmail';
+            // Bug #24 修复：用 currentEmailDetail.id 保留 active 状态
+            const currentActiveId = currentEmailDetail ? currentEmailDetail.id : null;
 
             container.innerHTML = emails.map((email, index) => {
                 const isChecked = selectedEmailIds.has(email.id);
+                const isActive = currentActiveId && email.id === currentActiveId;
                 const initial = (email.from || '?')[0].toUpperCase();
                 return `
-                <div class="email-item ${email.is_read === false ? 'unread' : ''}"
+                <div class="email-item ${email.is_read === false ? 'unread' : ''} ${isActive ? 'active' : ''}"
                      onclick="${clickHandler}('${email.id}', ${index})">
                     <div class="email-checkbox-wrapper" onclick="event.stopPropagation(); toggleEmailSelection('${email.id}')">
                         <input type="checkbox" class="email-checkbox" ${isChecked ? 'checked' : ''} style="pointer-events: none;">
