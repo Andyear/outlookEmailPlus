@@ -88,7 +88,7 @@
 
             if (hint) {
                 if (domains.length > 0) {
-                    hint.textContent = `可用域名：${domains.map(item => item.name).join(' / ')}`;
+                    hint.textContent = `${translateAppTextLocal('可用域名：')}${domains.map(item => item.name).join(' / ')}`;
                 } else {
                     hint.textContent = translateAppTextLocal('当前未配置可选域名；域名将由服务端自动分配。');
                 }

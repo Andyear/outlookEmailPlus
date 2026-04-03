@@ -267,6 +267,11 @@
         '前缀（可选）': 'Prefix (optional)',
         '自动分配域名': 'Auto-assign domain',
         '支持自定义前缀和多域名创建。': 'Custom prefix and multi-domain creation supported.',
+        '可用域名：': 'Available domains: ',
+        '当前未配置可选域名；域名将由服务端自动分配。': 'No selectable domains configured; domain will be auto-assigned by the server.',
+        'GPTMail 自动分配域名，无需手动选择。': 'GPTMail auto-assigns the domain, no manual selection needed.',
+        '域名配置加载失败': 'Failed to load domain configuration',
+        '无法读取临时邮箱域名配置。': 'Unable to read temp mailbox domain configuration.',
         // ── 设置页：临时邮箱配置区 ──
         '⚡ 临时邮箱配置': '⚡ Temp Mailbox Configuration',
         '全局临时邮箱 Provider': 'Global Temp Mailbox Provider',
