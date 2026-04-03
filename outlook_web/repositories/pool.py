@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 RESULT_TO_POOL_STATUS: Dict[str, str] = {
-    "success": "cooldown",
+    "success": "used",
     "verification_timeout": "cooldown",
     "provider_blocked": "frozen",
     "credential_invalid": "retired",
@@ -65,7 +65,9 @@ def claim_atomic(
             params.append(tag_name)
 
     if exclude_recent_minutes and exclude_recent_minutes > 0:
-        cutoff = (_utcnow() - timedelta(minutes=exclude_recent_minutes)).isoformat() + "Z"
+        cutoff = (
+            _utcnow() - timedelta(minutes=exclude_recent_minutes)
+        ).isoformat() + "Z"
         sql += " AND (a.last_claimed_at IS NULL OR a.last_claimed_at < ?)"
         params.append(cutoff)
 
@@ -97,7 +99,9 @@ def claim_atomic(
         return None
 
     now_str = _utcnow().isoformat() + "Z"
-    lease_expires_at_str = (_utcnow() + timedelta(seconds=lease_seconds)).isoformat() + "Z"
+    lease_expires_at_str = (
+        _utcnow() + timedelta(seconds=lease_seconds)
+    ).isoformat() + "Z"
     token = "clm_" + secrets.token_urlsafe(9)
 
     conn.execute(
@@ -353,6 +357,7 @@ def get_stats(conn: sqlite3.Connection) -> dict:
     pool_counts: dict = {
         "available": 0,
         "claimed": 0,
+        "used": 0,
         "cooldown": 0,
         "frozen": 0,
         "retired": 0,
