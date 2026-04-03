@@ -35,8 +35,11 @@
                                 await loadAccountsByGroup(currentGroupId, true);
                             }
                         }
-                    } else {
-                        // 首次进入：自动选中第一个非临时邮箱分组
+                    } else if (currentPage !== 'temp-emails') {
+                        // BUG-06 防御：在临时邮箱页面时，不自动选组。
+                        // 自动选组会调用 selectGroup()，进而清空 currentAccount，
+                        // 导致用户在临时邮箱页选中的邮箱被意外重置。
+                        // 仅在其他页面（mailbox/dashboard 等）才执行首次自动选组。
                         const firstNormalGroup = groups.find(g => !isTempMailboxGroup(g));
                         if (firstNormalGroup) {
                             selectGroup(firstNormalGroup.id);

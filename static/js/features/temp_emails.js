@@ -244,8 +244,10 @@
                     showToast(`临时邮箱已生成: ${data.email}`, 'success');
                     if (prefixInput) prefixInput.value = '';
                     delete accountsCache['temp'];
+                    // BUG-06: 不调用 loadGroups()，因为 loadTempEmails 内部已更新分组徽章。
+                    // loadGroups() 在 currentGroupId 为 null 时会触发 selectGroup()，
+                    // 进而清空 currentAccount，导致当前选中临时邮箱被意外重置。
                     loadTempEmails(true);
-                    loadGroups();
                 } else {
                     handleApiError(data, '生成临时邮箱失败');
                 }
@@ -408,7 +410,8 @@
                     }
 
                     loadTempEmails(true);
-                    loadGroups();
+                    // BUG-06: 同 generateTempEmail，不调用 loadGroups()，
+                    // 避免 currentGroupId 为 null 时触发 selectGroup() 清空 currentAccount。
                 } else {
                     handleApiError(data, '删除临时邮箱失败');
                 }
