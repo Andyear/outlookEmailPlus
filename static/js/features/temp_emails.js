@@ -70,10 +70,17 @@
             }
 
             domainSelect.disabled = false;
+            // BUG-07: 重建 innerHTML 前先保存当前选中值，重建后再恢复。
+            // 否则每次 loadTempEmails/renderTempEmailOptions 都会把用户选好的域名重置回"自动分配"。
+            const prevDomainValue = domainSelect.value;
             domainSelect.innerHTML = [
                 `<option value="">${escapeHtml(translateAppTextLocal('自动分配域名'))}</option>`,
                 ...domains.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`)
             ].join('');
+            // 如果用户之前选择的域名在新列表里仍然存在，则恢复选中状态
+            if (prevDomainValue && domains.some(d => d.name === prevDomainValue)) {
+                domainSelect.value = prevDomainValue;
+            }
             if (status) {
                 status.textContent = '';
                 status.style.display = 'none';
@@ -101,13 +108,19 @@
             const container = document.getElementById('accountList');
             const pageContainer = document.getElementById('tempEmailContainer');
 
-            // 初始化 provider 联动状态（与当前下拉框选中值保持同步）
             const providerSelect = document.getElementById('tempEmailProviderSelect');
-            if (providerSelect) {
-                onTempEmailProviderChange(providerSelect.value);
+            const domainSelect = document.getElementById('tempEmailDomainSelect');
+
+            // BUG-07: 原来这里调用 onTempEmailProviderChange()，
+            // 但那个函数是给用户手动切换 provider 时用的，会强制 forceRefresh=true 重新 fetch
+            // 并完全重建 domainSelect.innerHTML，导致用户选好的域名被重置。
+            // 改为只做必要的 disabled 状态同步，domain 选项加载由下面单次调用负责。
+            if (providerSelect && domainSelect) {
+                domainSelect.disabled = providerSelect.value !== 'cloudflare_temp_mail';
             }
 
             if (providerSelect && providerSelect.value === 'cloudflare_temp_mail') {
+                // 只调用一次，并尊重 forceRefresh 参数（非强制时优先用缓存，不会重建 innerHTML）
                 loadTempEmailOptions(forceRefresh);
             }
 

@@ -8,7 +8,7 @@ services:
     image: outlook-email-dev:latest
     container_name: outlook-email-dev
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       # Flask 核心配置
       SECRET_KEY: "dev-secret-key-change-in-prod"
@@ -20,7 +20,7 @@ services:
       SCHEDULER_AUTOSTART: "true"
 
       # 数据库路径（挂载 volume 保证持久化）
-      DATABASE_PATH: "/app/data/outlook_accounts.db"
+      DATABASE_PATH: "/app/data-docker/outlook_accounts.db"
 
       # 临时邮箱配置（可按需修改）
       GPTMAIL_BASE_URL: "https://mail.chatgpt.org.uk"
@@ -28,8 +28,8 @@ services:
 
     volumes:
       # 持久化数据库和运行时文件
-      - ./data:/app/data
-      - ./.runtime:/app/.runtime
+      - ./data-docker:/app/data-docker
+      - ./.runtime-docker:/app/.runtime
 
     restart: unless-stopped
 
