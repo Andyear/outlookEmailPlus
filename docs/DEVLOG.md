@@ -1,35 +1,8 @@
 # DEVLOG
 
-## v1.12.0 - 代理支持补全与设置页 Tab 化重构
+## v1.10.0 - OAuth 回归修复与认证后工作区重构
 
-发布日期：2026-04-05
-
-### 新增功能
-
-- **Telegram 通知代理支持（PRD-00011）**：`_send_telegram_message()` 内部自动读取 `telegram_proxy_url` 配置并透传至 `requests` 调用。设置页「通知」Tab 新增代理地址输入框 + 一键测试按钮，内联显示连通性结果（延迟 ms 或错误原因），无弹窗干扰。
-- **IMAP Token 代理透传（PRD-00011）**：`imap.py` 中 `get_emails_imap_with_server`、`get_email_detail_imap`、`get_imap_new_access_token`、`search_emails_imap_server` 等函数增加 `proxy_url` 参数，从账号所属分组读取并透传至 Token 获取层（`requests.post`）。外部 API（`external_api.py`）和邮件控制器（`emails.py`）的全部 IMAP 调用路径均已补全透传。
-- **设置页 Tab 化 UI 重构**：设置页面由单页滚动改为 4 个 Tab 导航（通知/轮询/系统/临时邮箱），引入 `card-shell` 视觉外壳，临时邮箱 Provider 配置独立分离，配置项更易定位。
-
-### 修复
-
-- 修复 Bug #28：`pool.release()` 时同步清理 `account_project_usage` 记录，避免账号 release 后依旧无法被重新 claim。
-- 修复 `emails.py` 中 `get_email_detail_imap` 和 `extract_verification` 路径遗漏的 `proxy_url` 参数透传。
-- 安全修复：移除 `tests/test_prd00011_proxy_live.py` 中硬编码的真实代理凭据，改为环境变量 `TEST_PROXY_URLS` 注入，外网测试默认 skip。
-
-### 重要变更
-
-- 版本号从 `1.10.2` 提升到 `1.12.0`
-- 新增 settings K-V 键 `telegram_proxy_url`（无 Schema 迁移，自动兼容）
-- 新增 API：`POST /api/settings/test-telegram-proxy`，返回 `{success, latency_ms?, error?}`
-- 物理 IMAP 连接（`imaplib`）不支持代理，这是技术限制，未作改动；仅 Token 获取的 HTTP 请求层加了代理支持
-
-### 测试/验证
-
-- 自动化测试（核心套件）：模块边界 3/3、错误追踪 22/22、PRD-00011 集成测试 7/7（全部通过）
-- 全量测试基准：`Ran 843 tests`，failures=144, errors=433（与 v1.11.0 完全一致，无新增回归）
-- 本机端到端验证：Telegram 代理测试按钮通过 Clash Verge 127.0.0.1:7890 成功返回（2544ms）；Graph Token 刷新通过代理成功（951ms）
-
-
+发布日期：2026-03-26
 
 ### 新增功能
 

@@ -19,11 +19,6 @@ def create_blueprint() -> Blueprint:
         methods=["POST"],
     )
     bp.add_url_rule(
-        "/api/settings/test-telegram-proxy",
-        view_func=settings_controller.api_test_telegram_proxy,
-        methods=["POST"],
-    )
-    bp.add_url_rule(
         "/api/settings/email-test",
         view_func=settings_controller.api_test_email,
         methods=["POST"],

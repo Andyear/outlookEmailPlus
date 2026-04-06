@@ -540,7 +540,6 @@ def list_messages_for_external(
         skip,
         top,
         IMAP_SERVER_NEW,
-        proxy_url=proxy_url,
     )
     if imap_new_result.get("success"):
         method_label = "IMAP (New)"
@@ -555,7 +554,6 @@ def list_messages_for_external(
         skip,
         top,
         IMAP_SERVER_OLD,
-        proxy_url=proxy_url,
     )
     if imap_old_result.get("success"):
         method_label = "IMAP (Old)"
@@ -727,7 +725,6 @@ def get_message_detail_for_external(  # noqa: C901
             message_id,
             folder,
             IMAP_SERVER_NEW,
-            proxy_url=proxy_url,
         )
         method_label = "IMAP (New)"
 
@@ -739,7 +736,6 @@ def get_message_detail_for_external(  # noqa: C901
             message_id,
             folder,
             IMAP_SERVER_OLD,
-            proxy_url=proxy_url,
         )
         method_label = "IMAP (Old)"
 

@@ -104,7 +104,9 @@ def validate_temp_mail_provider_name(value: str | None) -> str:
 
 
 def get_temp_mail_provider() -> str:
-    return normalize_temp_mail_provider_name(get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER))
+    return normalize_temp_mail_provider_name(
+        get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER)
+    )
 
 
 def get_temp_mail_runtime_provider_name(provider_name: str | None = None) -> str:
@@ -215,7 +217,9 @@ def get_external_api_key_masked(head: int = 4, tail: int = 4) -> str:
     safe_value = str(key)
     if len(safe_value) <= head + tail:
         return "*" * len(safe_value)
-    return safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    return (
+        safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    )
 
 
 # ── P1：公网模式安全配置 ──────────────────────────────
@@ -262,15 +266,23 @@ def get_pool_external_enabled() -> bool:
 
 
 def get_external_api_disable_pool_claim_random() -> bool:
-    return get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_release() -> bool:
-    return get_setting("external_api_disable_pool_claim_release", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_release", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_complete() -> bool:
-    return get_setting("external_api_disable_pool_claim_complete", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_complete", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_stats() -> bool:
@@ -293,31 +305,3 @@ def set_ui_layout_v2(layout: dict) -> None:
     import json
 
     set_setting("ui_layout_v2", json.dumps(layout, ensure_ascii=False))
-
-
-# ── Telegram 代理配置 ──────────────────────────────
-
-
-def get_telegram_proxy_url() -> str:
-    """获取 Telegram 推送使用的系统级代理 URL（明文存储，如 socks5://host:port）。"""
-    return get_setting("telegram_proxy_url", "").strip()
-
-
-def set_telegram_proxy_url(url: str) -> bool:
-    """保存 Telegram 代理 URL。"""
-    return set_setting("telegram_proxy_url", url.strip())
-
-
-def get_telegram_bot_token() -> str:
-    """获取 Telegram Bot Token（支持 enc: 加密格式）。"""
-    from outlook_web.security.crypto import decrypt_data, is_encrypted
-
-    value = get_setting("telegram_bot_token", "").strip()
-    if not value:
-        return ""
-    if is_encrypted(value):
-        try:
-            return decrypt_data(value)
-        except Exception:
-            return ""
-    return value

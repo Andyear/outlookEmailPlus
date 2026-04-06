@@ -224,7 +224,6 @@ def api_get_emails(email_addr: str) -> Any:
         skip,
         top,
         IMAP_SERVER_NEW,
-        proxy_url=proxy_url,
     )
     if imap_new_result.get("success"):
         account_summary = compact_summary_service.update_summary_from_message_list(
@@ -253,7 +252,6 @@ def api_get_emails(email_addr: str) -> Any:
         skip,
         top,
         IMAP_SERVER_OLD,
-        proxy_url=proxy_url,
     )
     if imap_old_result.get("success"):
         account_summary = compact_summary_service.update_summary_from_message_list(
@@ -433,7 +431,6 @@ def api_get_email_detail(email_addr: str, message_id: str) -> Any:
         account["refresh_token"],
         message_id,
         folder,
-        proxy_url,
     )
     if detail:
         return jsonify({"success": True, "email": detail})
@@ -676,7 +673,6 @@ def api_extract_verification(email_addr: str) -> Any:
                 skip=0,
                 top=1,
                 server=IMAP_SERVER_NEW,
-                proxy_url=proxy_url,
             )
             if imap_new_result.get("success"):
                 for item in imap_new_result.get("emails", []):
@@ -696,7 +692,6 @@ def api_extract_verification(email_addr: str) -> Any:
                 skip=0,
                 top=1,
                 server=IMAP_SERVER_OLD,
-                proxy_url=proxy_url,
             )
             if imap_old_result.get("success"):
                 for item in imap_old_result.get("emails", []):
@@ -737,7 +732,6 @@ def api_extract_verification(email_addr: str) -> Any:
                 account["refresh_token"],
                 latest_email.get("id"),
                 "inbox",
-                proxy_url,
             )
         except Exception:
             pass

@@ -2,37 +2,7 @@
 
 All notable changes to OutlookMail Plus are documented in this file.
 
-## [v1.12.0] - 2026-04-05
-
-### 新功能 / New Features
-
-- **PRD-00011 Telegram 代理支持**：Telegram 通知现在支持通过系统级 HTTP/SOCKS5 代理发送，可在设置页「通知」Tab 配置代理地址，并支持一键测试代理连通性（内联显示延迟 ms 或错误原因）
-- **PRD-00011 IMAP Token 代理透传**：`get_emails_imap_with_server`、`get_email_detail_imap`、`get_imap_new_access_token`、`search_emails_imap_server` 等 IMAP 相关 Token 获取请求现已支持透传分组代理（`proxy_url`），覆盖 emails、external_api 全部调用路径
-- **设置页 Tab 化 UI 重构**：设置页面拆分为 4 个 Tab（通知、轮询、系统、临时邮箱），引入 `card-shell` 视觉外壳，临时邮箱 Provider 配置独立分离，界面更清晰
-
-### 修复 / Bug Fixes
-
-- **Bug #28**：修复 `release` 后账号依旧不可用的问题：`release` 时同步清理 `account_project_usage` 记录
-- **emails.py detail 代理透传遗漏**：补充 `get_email_detail_imap` 和 `extract_verification` 中遗漏的 `proxy_url` 参数透传
-- **安全修复**：移除测试文件中硬编码的真实代理凭据，改为 `TEST_PROXY_URLS` 环境变量注入，外网直连测试默认 skip（需 `ENABLE_PROXY_LIVE_TEST=1`）
-
-### 重要变更
-
-- 新增 settings K-V 存储键：`telegram_proxy_url`，用于 Telegram 代理配置（无需 DB Schema 迁移，settings 表自动兼容）
-- 新增 API 接口：`POST /api/settings/test-telegram-proxy`，传入 `{"proxy_url": "..."}` 测试代理连通性，返回 `{success, latency_ms?, error?}`
-- 版本号从 `1.10.2` 提升到 `1.12.0`
-
-### 测试/验证
-
-- 自动化测试（核心）：`python -m unittest tests.test_module_boundaries tests.test_error_and_trace tests.test_prd00011_proxy_live -v`
-  - 模块边界测试：3/3 通过
-  - PRD-00011 集成测试：7/7 通过（1 skipped，需 `ENABLE_PROXY_LIVE_TEST=1` 才运行外网测试）
-- 历史测试基准：failures=144, errors=433（与 v1.11.0 基准完全一致，本次改动无回归）
-- 代理连通性验证：本机 Clash Verge（127.0.0.1:7890）实测 Telegram 代理测试按钮返回 ✅（2544ms）；Graph Token 刷新通过代理成功（951ms）
-
----
-
-
+## [v1.11.0] - 2026-04-03
 
 ### 新功能 / New Features
 
