@@ -1,7 +1,7 @@
 # 一键更新功能 — BUG/现象记录与解决方案
 
-> 版本: v1.0 | 日期: 2026-04-07
-> 状态: 待实施
+> 版本: v1.1 | 日期: 2026-04-07  
+> 状态: **已完成** (Commit: 91a8f35, 499aae9)
 
 ---
 
@@ -12,8 +12,9 @@
 | 端点 | 方法 | 说明 |
 |------|------|------|
 | `/api/system/version-check` | GET | 检查 GitHub 最新版本 |
-| `/api/system/trigger-update` | POST | 触发一键更新（Watchtower/Docker API） |
+| `/api/system/trigger-update` | POST | 触发一键更新 (支持 method 参数: watchtower / docker_api) |
 | `/api/system/test-watchtower` | POST | 测试 Watchtower 连通性 |
+| `/api/system/deployment-info` | GET | 获取当前容器部署信息 (镜像/标签/本地构建检测) |
 
 ### 新增设置项
 
@@ -21,6 +22,7 @@
 |--------|------|----------|
 | `watchtower_url` | Watchtower API 地址 | 明文 |
 | `watchtower_token` | Watchtower API Token | 加密存储 |
+| `update_method` | 更新方式 (watchtower / docker_api) | 明文 |
 
 ### 前端新增函数
 
@@ -219,10 +221,28 @@ Phase 3（在 BUG 修复和设置页面完善之后）
 
 ## 实施顺序
 
-| 优先级 | 编号 | 内容 | 状态 |
-|--------|------|------|------|
-| P0 | BUG-006 | GitHub 仓库地址修复 | 已修复 |
-| P1 | BUG-003 | Watchtower Token 为空启动失败 | 待实施 |
-| P1 | BUG-007 | 浏览器缓存旧 JS | 待实施 |
-| P2 | BUG-001/002/004/005 | UI 提示优化 | 待实施 |
-| P3 | 改进-001 | Docker API 自更新 | 待实施 |
+| 优先级 | 编号 | 内容 | 状态 | Commit |
+|--------|------|------|------|--------|
+| P0 | BUG-006 | GitHub 仓库地址修复 | ✅ 已完成 | e6d27b6 |
+| P1 | BUG-003 | Watchtower Token 为空启动失败 | ✅ 已完成 | 91a8f35 |
+| P1 | BUG-007 | 浏览器缓存旧 JS | ✅ 已完成 | 91a8f35 |
+| P2 | BUG-001/002/004/005 | UI 提示优化 | ✅ 已完成 | 91a8f35 |
+| P3 | 改进-001 | Docker API 自更新 | ✅ 已完成 | 91a8f35 |
+
+---
+
+## 总结
+
+所有计划任务 (P0-P3) 均已完成实施，一键更新功能已达到生产可用状态。
+
+### 主要改进：
+1. ✅ 修复所有已知 BUG (Token 启动失败、浏览器缓存、仓库地址)
+2. ✅ 完整的部署信息检测和用户提示
+3. ✅ 支持两种更新方式 (Watchtower / Docker API)
+4. ✅ 完善的安全机制和回滚机制
+5. ✅ 友好的用户配置引导
+
+### 关键文件清单:
+- 新增: `outlook_web/services/docker_update.py` (839 行)
+- 修改: 后端 4 个文件, 前端 2 个文件, 配置 3 个文件
+- 文档: `hot-update-ai-prompt.md`, `hot-update-baseline.md`
