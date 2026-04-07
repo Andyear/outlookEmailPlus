@@ -365,7 +365,7 @@ def api_version_check() -> Any:
 
     try:
         GITHUB_API = (
-            "https://api.github.com/repos/hshaokang/outlookemail-plus/releases/latest"
+            "https://api.github.com/repos/ZeroPointSix/outlookEmailPlus/releases/latest"
         )
         req = urllib.request.Request(
             GITHUB_API,
