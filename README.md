@@ -123,7 +123,8 @@ docker run -d \
 ```yaml
 services:
   app:
-    image: guangshanshui/outlook-email-plus:latest
+    image: ghcr.io/zeropointsix/outlook-email-plus:latest   # 推荐（国内网络稳定）
+    # image: guangshanshui/outlook-email-plus:latest         # Docker Hub 备选
     container_name: outlook-email-plus
     restart: unless-stopped
     ports:
