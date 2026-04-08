@@ -3993,6 +3993,14 @@ ${details}
                 
                 const data = await res.json();
                 if (data.success) {
+                    // 镜像已是最新，无需等待重启
+                    if (data.already_latest) {
+                        showToast('当前已是最新版本，无需更新', 'info', 5000);
+                        btn.disabled = false;
+                        btn.textContent = '立即更新';
+                        return;
+                    }
+
                     // 记录本次更新方式，供 waitForRestart 调整等待时长
                     try {
                         window.__lastUpdateMethod = updateMethod;
@@ -4170,11 +4178,18 @@ ${details}
 
                 const data = await res.json();
                 if (data.success) {
-                    window.__lastUpdateMethod = updateMethod;
                     if (resultDiv) {
                         resultDiv.style.display = 'block';
                         resultDiv.innerHTML = `<span style="color: var(--clr-success, #28a745);">✅ ${escapeHtml(data.message || '更新已触发')}</span>`;
                     }
+                    // 镜像已是最新，无需等待重启
+                    if (data.already_latest) {
+                        showToast(data.message || '当前已是最新版本', 'info', 5000);
+                        btn.disabled = false;
+                        btn.textContent = '立即更新';
+                        return;
+                    }
+                    window.__lastUpdateMethod = updateMethod;
                     btn.textContent = '等待容器重启...';
                     await waitForRestart();
                 } else {

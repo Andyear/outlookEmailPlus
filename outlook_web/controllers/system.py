@@ -599,6 +599,22 @@ def _trigger_docker_api_update() -> Any:  # noqa: C901
                 500,
             )
 
+        # Digest 预检查：先 pull 镜像并比较 digest，避免 updater 空跑导致前端等待超时
+        try:
+            pull_ok, pull_msg, new_digest = docker_update.pull_latest_image(image_ref)
+            if pull_ok and new_digest:
+                if docker_update.compare_image_digest(image_id, new_digest):
+                    return jsonify(
+                        {
+                            "success": True,
+                            "message": "当前已是最新版本，无需更新",
+                            "already_latest": True,
+                        }
+                    )
+        except Exception:
+            # pull 失败不阻断：交给 updater 容器内部重试
+            pass
+
         ok, msg = docker_update.spawn_update_helper_container(
             target_id,
             remove_old=remove_old,
