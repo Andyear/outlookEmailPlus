@@ -750,10 +750,15 @@ def api_deployment_info() -> Any:  # noqa: C901
     deployment_info["is_local_build"] = is_local
 
     # 3. 判断是否使用固定标签
+    # 策略：仅当 tag 符合语义化版本（如 v1.2.3、1.2.3）时才视为固定版本。
+    # 分支名（如 hotupdate-test）、latest、main 等均视为滚动标签。
+    import re
+
     uses_fixed_tag = False
     tag = _parse_tag(image_name)
     if tag:
-        if tag not in ("latest", "main", "master", "dev"):
+        _semver_pattern = re.compile(r"^v?\d+\.\d+(\.\d+)?([._-].*)?$")
+        if _semver_pattern.match(tag):
             uses_fixed_tag = True
 
     deployment_info["uses_fixed_tag"] = uses_fixed_tag
@@ -835,38 +840,35 @@ def api_deployment_info() -> Any:  # noqa: C901
             }
         )
 
-    # Watchtower 连通性提示：仅当当前选择 Watchtower 更新方式时才作为错误提示
+    # 智能推荐更新方式：根据实际可用性决定
+    # 优先级：用户已保存的偏好 > 自动检测
+    if update_method == "watchtower" and not watchtower_reachable and docker_api_available:
+        recommended_method = "docker_api"
+    elif update_method == "docker_api" and not docker_api_available and watchtower_reachable:
+        recommended_method = "watchtower"
+    else:
+        recommended_method = update_method
+    deployment_info["recommended_method"] = recommended_method
+
+    # Watchtower 连通性提示：根据推荐方式决定严重级别
     if not watchtower_reachable and not is_local:
-        if update_method == "watchtower":
+        if recommended_method == "watchtower":
             warnings.append(
                 {
                     "type": "watchtower_unreachable",
                     "severity": "error",
-                    "message": "无法连接 Watchtower 服务（当前更新方式为 Watchtower）",
-                    "message_en": "Cannot connect to Watchtower service (current method: Watchtower)",
+                    "message": "无法连接 Watchtower 服务",
+                    "message_en": "Cannot connect to Watchtower service",
                     "suggestion": "请确保 Watchtower 容器正常运行，并在系统设置中配置正确的 API 地址和 Token",
                     "suggestion_en": (
                         "Please ensure Watchtower container is running and API credentials are configured correctly"
                     ),
                 }
             )
-        else:
-            # Docker API 模式下，Watchtower 不可达不应阻塞
-            warnings.append(
-                {
-                    "type": "watchtower_unreachable",
-                    "severity": "info",
-                    "message": "Watchtower 不可达（当前更新方式为 Docker API，可忽略）",
-                    "message_en": "Watchtower is unreachable (current method: Docker API, can be ignored)",
-                    "suggestion": "如需使用 Watchtower 更新，请先配置 Watchtower 容器；或继续使用 Docker API 更新方式",
-                    "suggestion_en": (
-                        "If you want Watchtower updates, configure Watchtower; otherwise keep using Docker API method"
-                    ),
-                }
-            )
+        # Docker API 可用时不再显示 Watchtower 不可达提示（避免噪音）
 
     # Docker API 可用性提示
-    if update_method == "docker_api" and not is_local:
+    if recommended_method == "docker_api" and not is_local:
         if not docker_api_available:
             warnings.append(
                 {
@@ -882,12 +884,7 @@ def api_deployment_info() -> Any:  # noqa: C901
     deployment_info["warnings"] = warnings
 
     # 7. 判断是否可以使用一键更新
-    # 支持两种模式：Watchtower 连通 或 Docker API 已启用且 socket 可用
-    can_auto_update = (
-        not is_local
-        and (not uses_fixed_tag or image_name.endswith(":latest"))
-        and (watchtower_reachable or docker_api_available)
-    )
+    can_auto_update = not is_local and (watchtower_reachable or docker_api_available)
 
     deployment_info["can_auto_update"] = can_auto_update
 

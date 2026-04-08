@@ -1910,6 +1910,18 @@ ${details}
 
                 lastDeploymentInfo = data.deployment;
                 renderDeploymentWarnings(lastDeploymentInfo);
+
+                // 根据后端推荐的更新方式自动选择 radio
+                const recommended = data.deployment.recommended_method;
+                if (recommended) {
+                    const radios = document.getElementsByName('updateMethod');
+                    radios.forEach(radio => {
+                        if (radio.value === recommended) {
+                            radio.checked = true;
+                            radio.dispatchEvent(new Event('change'));
+                        }
+                    });
+                }
             } catch (e) {
                 if (!silent) {
                     showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
