@@ -8,6 +8,40 @@
 
 ### 操作记录
 
+#### 2. v1.13.0 发布与 SonarCloud 修复
+
+**时间**：2026-04-09
+
+**版本发布**：
+- 版本号：`1.12.0` → `1.13.0`（`outlook_web/__init__.py`）
+- 更新 CHANGELOG.md、DEVLOG.md、README.md、README.en.md 版本引用
+- 更新 `tests/test_version_update.py` 中所有版本断言和 mock 数据
+- 本地 893 测试全部通过（0 failures, 6 skipped）
+- CI 全量通过（Python Tests / Code Quality / Docker Build）
+- Git Tag `v1.13.0` → 触发 `create-github-release.yml` 自动创建 GitHub Release
+- Docker 镜像双仓库推送成功：
+  - GHCR: `ghcr.io/zeropointsix/outlook-email-plus:v1.13.0` / `:latest`
+  - Docker Hub: `guangshanshui/outlook-email-plus:v1.13.0` / `:latest`
+  - Digest: `sha256:8909cf0300c956d2db803157dfdeced2a24e6b6c09c149509f87ae6025ff086d`
+  - 架构: `linux/amd64` + `linux/arm64`
+
+**SonarCloud 失败修复**：
+- 根因：`sonar-project.properties` 中 `sonar.sources` / `sonar.inclusions` / `sonar.coverage.exclusions` 引用了已删除的 `fix_format.py`
+- 该文件在 commit `04824bc` 已删除，但 SonarCloud 配置未同步清理
+- 修复：从 3 处配置项中移除 `fix_format.py` 引用
+- 同步清理：`docs/项目地图.md` 中可清理项目列表移除 `fix_format.py`
+
+**修改文件**：
+- `outlook_web/__init__.py`：版本号 → `1.13.0`
+- `tests/test_version_update.py`：版本断言 + mock tag_name
+- `CHANGELOG.md`：新增 `[v1.13.0]` 段落
+- `docs/DEVLOG.md`：新增 `v1.13.0` 段落
+- `README.md` / `README.en.md`：版本引用更新
+- `sonar-project.properties`：移除 `fix_format.py` 引用（3 处）
+- `docs/项目地图.md`：移除已删除文件记录
+
+---
+
 #### 1. hotupdate-test 分支端到端测试与合并
 
 **时间**：2026-04-09
