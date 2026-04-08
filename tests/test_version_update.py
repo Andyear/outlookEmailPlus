@@ -388,7 +388,8 @@ class TriggerUpdateAPITests(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(data["success"])
-        self.assertIn("更新触发成功", data["message"])
+        self.assertTrue(data.get("already_latest"))
+        self.assertIn("检查完毕", data["message"])
 
     def test_watchtower_non_200(self):
         """Watchtower 返回非 200 时返回 502"""
