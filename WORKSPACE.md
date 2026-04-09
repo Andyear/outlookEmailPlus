@@ -106,8 +106,48 @@
 
 **修改文件**：
 - `outlook_web/services/mailbox_resolver.py` — 新增 CF pool 账号 → `kind='temp'` 逻辑
+- `outlook_web/services/refresh.py` — 排除 CF pool 账号进入 OAuth 刷新链路（`provider='cloudflare_temp_mail'`）
 - `tests/test_pool_cf_real_e2e.py` — **新增** 真实 CF Worker E2E 测试（4 个用例）
 - `tests/test_pool_cf_integration_tdd_skeleton.py` — E2E mock 测试 skip（已由真实 E2E 替代）
+
+#### 7d. Phase 6 风险修复 + 联调验收
+
+**时间**：2026-04-09
+
+**发现并修复的风险**：
+- CF pool 账号（account_type='outlook'）会被 `refresh.py` 误选入 OAuth token 刷新链路
+- 修复：`is_refreshable_outlook_account()` 新增 `provider` 参数，排除 `cloudflare_temp_mail`
+- 修复：`build_refreshable_outlook_account_where()` SQL 新增 `provider != 'cloudflare_temp_mail'` 条件
+- 验证：refresh 测试 7/7 通过
+
+**Phase 6 进度**：
+- ✅ Task 6.1: 本地联调脚本（已被真实 E2E 覆盖）
+- ✅ Task 6.3: 日志与审计（claim/complete audit 有 provider、account_id、result）
+- ✅ Task 6.4: 风险清单复核（refresh 排除 + 缓存依赖已通过 E2E 验证）
+- ✅ Task 6.5: 验收清单（claim → read → complete 全链路真实验证通过）
+
+#### 7e. Phase 6.2 前端 UI 保护 + 后端删除/编辑守卫
+
+**时间**：2026-04-09
+
+**操作内容**：
+
+1. **前端 UI 保护**（`static/js/features/groups.js`）：
+   - `getProviderLabel()` 新增 `cloudflare_temp_mail: 'CF 临时邮箱'` 标签
+   - 新增 `isCfPoolAccount` 变量，识别 CF pool 账号
+   - CF pool 账号的编辑和删除按钮设为 `disabled` + `opacity:0.3` + 提示文案
+
+2. **后端删除保护**（`outlook_web/controllers/accounts.py`）：
+   - `api_delete_account()` 新增 CF pool 检查，返回 403
+   - `api_delete_account_by_email()` 新增 CF pool 检查，返回 403
+   - `api_batch_delete_accounts()` 新增 CF pool 跳过逻辑
+   - `api_update_account()` 新增 CF pool 检查，返回 403
+
+3. **全量测试**：917 测试通过，0 failures
+
+**修改文件**：
+- `static/js/features/groups.js` — CF provider 标签 + 编辑/删除按钮禁用
+- `outlook_web/controllers/accounts.py` — 删除/编辑 CF pool 账号保护（4 处）
 
 ---
 
