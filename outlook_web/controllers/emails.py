@@ -205,17 +205,6 @@ def api_get_emails(email_addr: str) -> Any:
                 extra={"details": all_errors},
             )
 
-        # 如果是账号授权失效（Graph API 返回 401），不再回退 IMAP 而是直接提示重新授权
-        if graph_result.get("auth_expired"):
-            return build_error_response(
-                "ACCOUNT_AUTH_EXPIRED",
-                "账号授权已失效，请前往「刷新 Token」页面重新授权",
-                message_en="Account authorization has expired. Please re-authorize the account",
-                err_type="AuthorizationError",
-                status=401,
-                details={"email": email_addr},
-            )
-
     imap_new_result = imap_service.get_emails_imap_with_server(
         account["email"],
         account["client_id"],
@@ -270,6 +259,17 @@ def api_get_emails(email_addr: str) -> Any:
         )
     else:
         all_errors["imap_old"] = imap_old_result.get("error")
+
+    # 所有方式均失败；若 Graph API 明确返回 token 过期，优先提示重新授权
+    if graph_result.get("auth_expired"):
+        return build_error_response(
+            "ACCOUNT_AUTH_EXPIRED",
+            "账号授权已失效，请前往「刷新 Token」页面重新授权",
+            message_en="Account authorization has expired. Please re-authorize the account",
+            err_type="AuthorizationError",
+            status=401,
+            details={"email": email_addr},
+        )
 
     return build_error_response(
         "EMAIL_FETCH_ALL_METHODS_FAILED",
@@ -586,6 +586,7 @@ def api_extract_verification(email_addr: str) -> Any:
     # 收集邮件（同时从收件箱和垃圾邮件获取）
     emails = []
     graph_success = False
+    graph_auth_expired = False  # 记录 Graph API 是否明确返回 token 过期（非权限不足）
     current_refresh_token = account["refresh_token"]  # 保持可能因 Token Rotation 更新的 token
 
     # 1. 尝试 Graph API 从收件箱获取最新邮件
@@ -620,15 +621,7 @@ def api_extract_verification(email_addr: str) -> Any:
                 except Exception:
                     pass
         elif inbox_result.get("auth_expired"):
-            # Bug 1 修复：Graph API 返回 401，账号授权失效，直接提示重新授权，不再回退 IMAP
-            return build_error_response(
-                "ACCOUNT_AUTH_EXPIRED",
-                "账号授权已失效，请前往「刷新 Token」页面重新授权",
-                message_en="Account authorization has expired. Please re-authorize the account",
-                err_type="AuthorizationError",
-                status=401,
-                details={"email": email_addr},
-            )
+            graph_auth_expired = True
     except Exception:
         pass
 
@@ -649,15 +642,7 @@ def api_extract_verification(email_addr: str) -> Any:
                 emails.append(enriched)
             graph_success = True
         elif junk_result.get("auth_expired") and not graph_success:
-            # 只有在 inbox 也没有成功的情况下，才因 junkemail 401 而返回授权失效
-            return build_error_response(
-                "ACCOUNT_AUTH_EXPIRED",
-                "账号授权已失效，请前往「刷新 Token」页面重新授权",
-                message_en="Account authorization has expired. Please re-authorize the account",
-                err_type="AuthorizationError",
-                status=401,
-                details={"email": email_addr},
-            )
+            graph_auth_expired = True
     except Exception:
         pass
 
@@ -702,6 +687,16 @@ def api_extract_verification(email_addr: str) -> Any:
             pass
 
     if not emails:
+        # 所有方式均失败；若 Graph API 明确返回 token 过期，优先提示重新授权
+        if graph_auth_expired:
+            return build_error_response(
+                "ACCOUNT_AUTH_EXPIRED",
+                "账号授权已失效，请前往「刷新 Token」页面重新授权",
+                message_en="Account authorization has expired. Please re-authorize the account",
+                err_type="AuthorizationError",
+                status=401,
+                details={"email": email_addr},
+            )
         error_payload = build_error_payload("EMAIL_NOT_FOUND", "未找到邮件", "NotFoundError", 404, f"email={email_addr}")
         return jsonify({"success": False, "error": error_payload}), 404
 

@@ -16,6 +16,7 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ### 修复 / Bug Fixes
 
+- 修复 Graph API 401 被统一视为授权失效的问题，现可区分 token 过期与权限不足，避免错误跳过 IMAP 回退
 - 修复 Watchtower 连通测试 5s 超时（Watchtower 同步检查需 25-30s），增加到 35s
 - 修复 Watchtower 200 响应被误判为"更新成功"（实际为"已是最新"）
 - 修复 GHCR 镜像不在白名单导致 Docker API 更新被拦截
