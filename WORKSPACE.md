@@ -61,7 +61,7 @@
 
 **待完成**：
 - ~~Phase 0: 文档对齐收尾（PRD/FD/TD 接口名/schema 版本）~~ ✅ 已完成
-- Phase 4: external 读信链路适配（mailbox_resolver 识别 CF pool 账号）
+- ~~Phase 4: external 读信链路适配（mailbox_resolver 识别 CF pool 账号）~~ ✅ 已完成
 - Phase 5: 补充 external 读信链路测试、DB v19 迁移测试
 - Phase 6: 联调与验收
 
@@ -79,6 +79,35 @@
   - `Schema v18` → `Schema v19`
   - 所有 `/claim` 引用 → `claim-random`
 - TODO：Phase 0 任务全部标记为 `[x]`
+
+#### 7c. Phase 4 读信链路适配 + 真实 E2E 测试
+
+**时间**：2026-04-09
+
+**操作内容**：
+
+1. **mailbox_resolver.py 适配**：
+   - CF pool 账号（`provider='cloudflare_temp_mail'`）→ 返回 `kind='temp'`
+   - meta 从 `accounts.temp_mail_meta` 解析，包含 `provider_jwt`
+   - 外部读信链路自动走 `TempMailService → CF Provider → 真实 CF Worker API`
+
+2. **真实 CF Worker E2E 测试**（`tests/test_pool_cf_real_e2e.py`）：
+   - CF Worker: `https://temp.zerodotsix.top` + 真实 admin key
+   - E2E-01: claim-random → 真实创建 CF 邮箱 ✅
+   - E2E-02: 读取邮件列表（新邮箱为空，正确返回 404）✅
+   - E2E-03: complete(success) → 远程 CF 邮箱已删除 ✅
+   - E2E-04: complete(verification_timeout) → 远程邮箱保留 ✅
+   - 4/4 全部通过（11.961s）
+
+3. **测试结果汇总**：
+   - Pool 相关 70 测试（含 TDD 骨架）：0 failures, 1 skipped
+   - 真实 E2E 4 测试：0 failures
+   - 模块边界测试 3/3 通过
+
+**修改文件**：
+- `outlook_web/services/mailbox_resolver.py` — 新增 CF pool 账号 → `kind='temp'` 逻辑
+- `tests/test_pool_cf_real_e2e.py` — **新增** 真实 CF Worker E2E 测试（4 个用例）
+- `tests/test_pool_cf_integration_tdd_skeleton.py` — E2E mock 测试 skip（已由真实 E2E 替代）
 
 ---
 

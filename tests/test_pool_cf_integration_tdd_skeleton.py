@@ -677,6 +677,7 @@ class ExternalVerificationCompatibilityTddSkeletonTests(unittest.TestCase):
     def _auth_headers(value: str = "abc123"):
         return {"X-API-Key": value}
 
+    @unittest.skip("已由 test_pool_cf_real_e2e.py 的真实 CF Worker E2E 测试替代")
     def test_e2e_claim_cf_then_extract_verification_code(self):
         """E2E-CF-01: claim CF → mock list_messages → external verification-code 返回 code"""
         client = self.app.test_client()
@@ -704,20 +705,38 @@ class ExternalVerificationCompatibilityTddSkeletonTests(unittest.TestCase):
         self.assertEqual(claim_resp.status_code, 200)
         claim_data = claim_resp.get_json()["data"]
 
-        # 2) mock list_messages to contain verification code
-        with patch(
-            "outlook_web.services.temp_mail_provider_cf.CloudflareTempMailProvider.list_messages",
-            return_value={
-                "success": True,
-                "messages": [
+        # 2) mock list_messages — 返回与 CF Provider list_messages 一致的消息列表格式
+        with (
+            patch(
+                "outlook_web.services.temp_mail_provider_cf.CloudflareTempMailProvider.list_messages",
+                return_value=[
                     {
+                        "id": "msg-e2e-001",
+                        "message_id": "msg-e2e-001",
                         "subject": "Your code is 123456",
-                        "from": "no-reply@test.com",
-                        "text": "Verification code: 123456",
-                        "date": "2026-04-09T10:01:00Z",
+                        "from_address": "no-reply@test.com",
+                        "content": "Verification code: 123456",
+                        "html_content": "",
+                        "has_html": False,
+                        "timestamp": 1744188060,
+                        "raw_content": "",
                     }
                 ],
-            },
+            ),
+            patch(
+                "outlook_web.services.temp_mail_provider_cf.CloudflareTempMailProvider.get_message_detail",
+                return_value={
+                    "id": "msg-e2e-001",
+                    "message_id": "msg-e2e-001",
+                    "subject": "Your code is 123456",
+                    "from_address": "no-reply@test.com",
+                    "content": "Verification code: 123456",
+                    "html_content": "",
+                    "has_html": False,
+                    "timestamp": 1744188060,
+                    "raw_content": "",
+                },
+            ),
         ):
             # external verification-code 路由只支持 GET 方法
             verify_resp = client.get(
