@@ -8,6 +8,33 @@
 
 ### 操作记录
 
+#### 34. v1.16.0 发布后 CI/CD 状态核对
+
+**时间**：2026-04-13
+
+**本次操作**：
+
+1. 使用 GitHub CLI 核对最新工作流状态
+   - 命令：`gh run list --limit 30`、`gh run view <run_id> --log-failed`
+
+2. v1.16.0 对应流水线结论
+   - `Create GitHub Release`（tag `v1.16.0`）✅ success
+   - `Python Tests`（main）✅ success
+   - `SonarCloud Scan`（main）✅ success
+   - `Code Quality`（main）❌ failure
+   - `Build and Push Docker Image`（main/tag）❌ failure（由 quality-gate 阻断）
+
+3. 失败根因
+   - `Code Quality` 中 `black --check` 未通过
+   - 日志显示 8 个文件需格式化（含 `outlook_web/controllers/token_tool.py`、`outlook_web/services/oauth_tool.py`、`tests/test_version_update.py` 等）
+   - `docker-build-push` 工作流前置 `quality-gate` 失败，因此镜像推送流程被阻断
+
+4. 状态说明
+   - 本地发布与 GitHub Release 已成功（tag、Release 文案、产物上传均完成）
+   - 但 CI 质量门禁未全绿，需后续补格式化并再次推送以恢复 main/tag 镜像流水线
+
+---
+
 #### 33. v1.16.0 正式发布（GitHub Release + 产物上传）
 
 **时间**：2026-04-13
