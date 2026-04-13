@@ -8,7 +8,9 @@ from outlook_web.errors import build_error_payload
 from outlook_web.services.http import get_response_details
 
 # Token 端点
-TOKEN_URL_GRAPH = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+TOKEN_URL_TEMPLATE = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+TOKEN_URL_GRAPH = TOKEN_URL_TEMPLATE.format(tenant="common")
+DEFAULT_GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 
 # Graph API 返回 401 时的状态码（可能是 token 过期，也可能是权限不足，需进一步解析响应体区分）
 GRAPH_AUTH_EXPIRED_STATUS = 401
@@ -43,7 +45,15 @@ def build_proxies(proxy_url: str) -> Optional[Dict[str, str]]:
     return {"http": proxy_url, "https": proxy_url}
 
 
-def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url: str = None) -> Dict[str, Any]:
+def build_token_url(tenant: str | None = None) -> str:
+    """按 tenant 生成 Microsoft OAuth token endpoint。"""
+    normalized_tenant = (tenant or "common").strip() or "common"
+    return TOKEN_URL_TEMPLATE.format(tenant=normalized_tenant)
+
+
+def get_access_token_graph_result(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> Dict[str, Any]:
     """获取 Graph API access_token（包含错误详情）"""
     try:
         proxies = build_proxies(proxy_url)
@@ -53,7 +63,7 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://graph.microsoft.com/.default",
+                "scope": DEFAULT_GRAPH_SCOPE,
             },
             timeout=30,
             proxies=proxies,
@@ -106,7 +116,9 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
         }
 
 
-def get_access_token_graph(client_id: str, refresh_token: str, proxy_url: str = None) -> Optional[str]:
+def get_access_token_graph(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> Optional[str]:
     """获取 Graph API access_token"""
     result = get_access_token_graph_result(client_id, refresh_token, proxy_url)
     if result.get("success"):
@@ -151,7 +163,9 @@ def get_emails_graph(
         }
 
         proxies = build_proxies(proxy_url)
-        res = requests.get(url, headers=headers, params=params, timeout=30, proxies=proxies)
+        res = requests.get(
+            url, headers=headers, params=params, timeout=30, proxies=proxies
+        )
 
         if res.status_code != 200:
             details = get_response_details(res)
@@ -207,7 +221,9 @@ def get_email_detail_graph(
         }
 
         proxies = build_proxies(proxy_url)
-        res = requests.get(url, headers=headers, params=params, timeout=30, proxies=proxies)
+        res = requests.get(
+            url, headers=headers, params=params, timeout=30, proxies=proxies
+        )
 
         if res.status_code != 200:
             return None
@@ -246,25 +262,35 @@ def get_email_raw_graph(
         return None
 
 
-def test_refresh_token(client_id: str, refresh_token: str, proxy_url: str = None) -> tuple[bool, str | None]:
+def test_refresh_token(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> tuple[bool, str | None]:
     """测试 refresh token 是否有效，返回 (是否成功, 错误信息)"""
-    ok, err, _new_refresh_token = test_refresh_token_with_rotation(client_id, refresh_token, proxy_url)
+    ok, err, _new_refresh_token = test_refresh_token_with_rotation(
+        client_id, refresh_token, proxy_url
+    )
     return ok, err
 
 
 def test_refresh_token_with_rotation(
-    client_id: str, refresh_token: str, proxy_url: str = None
+    client_id: str,
+    refresh_token: str,
+    proxy_url: str = None,
+    *,
+    tenant: str = "common",
+    scope: str = DEFAULT_GRAPH_SCOPE,
 ) -> tuple[bool, str | None, str | None]:
     """测试 refresh token 是否有效；如服务端返回新的 refresh_token，则一并返回（用于滚动更新）。"""
     try:
         proxies = build_proxies(proxy_url)
+        resolved_scope = (scope or DEFAULT_GRAPH_SCOPE).strip() or DEFAULT_GRAPH_SCOPE
         res = requests.post(
-            TOKEN_URL_GRAPH,
+            build_token_url(tenant),
             data={
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://graph.microsoft.com/.default",
+                "scope": resolved_scope,
             },
             timeout=30,
             proxies=proxies,
@@ -333,7 +359,9 @@ def delete_emails_graph(
 
         batch_requests = []
         for idx, msg_id in enumerate(batch):
-            batch_requests.append({"id": str(idx), "method": "DELETE", "url": f"/me/messages/{msg_id}"})
+            batch_requests.append(
+                {"id": str(idx), "method": "DELETE", "url": f"/me/messages/{msg_id}"}
+            )
 
         try:
             proxies = build_proxies(proxy_url)
@@ -353,7 +381,9 @@ def delete_emails_graph(
                     else:
                         failed_count += 1
                         try:
-                            errors.append(f"Msg ID: {batch[int(res['id'])]}, Status: {res.get('status')}")
+                            errors.append(
+                                f"Msg ID: {batch[int(res['id'])]}, Status: {res.get('status')}"
+                            )
                         except Exception:
                             errors.append(f"Status: {res.get('status')}")
             else:

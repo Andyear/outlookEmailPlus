@@ -2,32 +2,23 @@
 
 All notable changes to OutlookMail Plus are documented in this file.
 
-## [v1.14.0] - 2026-04-09
+## [v1.15.0] - 2026-04-12
 
 ### 新功能 / New Features
 
-- **CF 临时邮箱接入邮箱池（Phase 0-6）**：`/api/external/pool/claim-random` 在 `provider=cloudflare_temp_mail` 且池空时支持动态创建并直接进入 `claimed` 状态，统一纳入池化生命周期
-- **CF 读信链路打通**：`mailbox_resolver` 新增 `provider=cloudflare_temp_mail` 识别与 `kind=temp` 描述返回，外部读信/验证码提取链路可透明处理 CF pool 账号
-- **临时邮箱 Options 按 Provider 返回**：`/api/temp-emails/options` 支持 `provider_name` 参数，前端会按当前 provider 请求域名与规则，减少跨 provider 配置串扰
-- **账号管理保护增强**：池化管理的 CF 账号在 UI 和后端都增加删除/编辑保护，避免手工误操作破坏池状态
+- **OAuth Token 获取工具**：新增独立 Token 工具窗口，支持 Authorization Code + PKCE、手动粘贴回调 URL、Scope 校验、JWT 诊断信息展示
+- **兼容账号导入模式**：OAuth Token 工具现固定面向个人 Microsoft 账号导入，要求 Public Client、`tenant=consumers`、`client_secret` 为空
+- **账号一键写回**：获取到的 refresh token 可直接更新已有 Outlook 账号或创建新账号，并在写入前执行 token 有效性校验与轮换处理
+- **配置持久化与环境变量开关**：支持 `oauth_tool_*` Settings 持久化、`OAUTH_TOOL_ENABLED` 总开关，以及 Client ID / Redirect URI / Scope / Tenant 的环境变量默认值
 
 ### 修复 / Bug Fixes
 
-- **Graph 401 回退策略修复**：区分 token 过期与权限不足（如 `ErrorAccessDenied`），权限不足场景允许继续 IMAP 回退，避免误判为必须重新授权
-- **Issue #32 后端 500 修复**：删除账号前事务化清理 `account_claim_logs` 与 `account_project_usage`，修复关联历史导致的删除失败
-- **全选交互修复**：账号全选改为基于分组数据源计算，并补充搜索模式下的显式拦截提示，减少“只选中当前页”误解
-- **批量导入换行问题修复**：修复复制凭据时 refresh_token 折行导致的导入失败，新增续行合并逻辑
-- **CF 配置兼容修复**：增强 CF Worker domains/options 读取与自动同步兜底，修复部分场景下域名下拉不生效
-
-### 测试 / Verification
-
-- 新增与补强测试覆盖：
-  - `tests/test_pool_cf_integration_tdd_skeleton.py`
-  - `tests/test_pool_cf_real_e2e.py`
-  - `tests/test_graph_401_imap_fallback_regression.py`
-  - `tests/test_account_delete_with_pool_history.py`
-  - `tests/test_temp_emails_api_regression.py`
-  - `tests/test_cf_pool_missing_coverage.py`
+- 修复 Microsoft token 端点仅返回 `error_description` 时无法命中错误引导的问题，现会同时保留 `error` 码用于稳定映射
+- 修复工具关闭场景下 Blueprint 已注册但测试期望动态 404 的问题，Controller 层现统一执行开关检查
+- 加固 Token 工具的 Scope Chip 渲染逻辑，改为 DOM 创建 + 事件委托，避免将动态 scope 值拼进内联 `onclick`
+- 明确 `oauth_tool_client_secret` 的兼容读取策略：历史明文配置继续可读，不可解密的 `enc:` 值保持隐藏为空字符串
+- 修复 Token 工具“写入账号”弹窗在校验失败或接口返回 400 时提示被主状态栏遮住、表现为“确认写入没反应”的问题，错误现已直接显示在弹窗内
+- 收敛 Token 工具为兼容账号导入模式：前端禁用 `client_secret`、Tenant 固定 `consumers`、默认 Scope 切换到 IMAP 兼容预设，`prepare/config/save` 接口统一拒绝不兼容配置，避免“保存成功但运行态刷新失败”的模型错位
 
 ---
 

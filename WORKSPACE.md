@@ -4,68 +4,919 @@
 
 ---
 
-## 2026-04-09
+## 2026-04-13
 
 ### 操作记录
 
-#### 7. v1.14.0 发布执行 + CI/CD 与镜像仓库核对（按实际回填）
+#### 28. OAuth Token 工具 UI 简化 + 获取授权链接 + i18n 翻译
 
-**时间**：2026-04-09
+**时间**：2026-04-13
 
-**执行目标**：
-- 基于 `v1.13.0..HEAD` 生成 v1.14.0 发布内容，完成版本升级、测试、构建、Release 发布，并核对 CI/CD 与镜像仓库状态。
+**本次操作**：
 
-**本地发布动作**：
+1. UI 简化
+   - 删除整个「Azure 配置指引」折叠卡片（含 4 步配置说明 + 故障排查长文）
+   - 删除 Client Secret 输入框（之前已 disabled）
+   - 删除 Tenant 下拉框（之前固定 `consumers`）
+   - 标题从「兼容账号 Token 导入工具」→「OAuth Token 工具」
+   - 副标题改为简洁说明
+   - CSS 清理不再使用的样式
 
-1. 版本与记录同步
-   - `outlook_web/__init__.py`：`1.13.0` → `1.14.0`
-   - `README.md`、`README.en.md`：稳定版本号更新为 `v1.14.0`
-   - `CHANGELOG.md`：新增 `## [v1.14.0] - 2026-04-09`
-   - `docs/DEVLOG.md`：新增 v1.14.0 章节（新增/修复/重要变更/测试验证 + CI/CD 实际状态）
+2. 获取授权链接功能（替代自动弹窗）
+   - 按钮从「登录 Microsoft」→「获取授权链接」
+   - 新增 ② 授权链接展示区：readonly input + 「复制链接」「打开链接」按钮
+   - `startOAuth()` 不再自动 `window.open()` 弹窗，改为展示链接供用户复制
+   - 步骤编号更新：② 授权链接 → ③ 换取 Token → ④ 结果
 
-2. 测试执行
-   - 首次执行：`python -m unittest discover -s tests -v`
-   - 初次失败原因：`tests/test_import_and_fetch.py` 使用 `pytest.skip(..., allow_module_level=True)`，被 `unittest discover` 当作导入错误处理
-   - 修复：改为 `raise unittest.SkipTest("manual live diagnostic script")`
-   - 复跑结果：`Ran 952 tests in 168.755s`，`OK (skipped=8)`
+3. i18n 翻译支持
+   - `token_tool.html` 引入 `i18n.js`
+   - `i18n.js` exactMap 新增约 50 条 token tool 中英翻译
+   - `token_tool.js` 所有动态中文提示用 `t()` / `translateAppText()` 包装
+   - 用户切换中/英后，页面静态文本自动翻译，动态提示也跟随
 
-3. 构建与产物
-   - 构建命令：`docker build -t outlook-email-plus:v1.14.0 .`
-   - 结果：成功（image digest: `sha256:c3a1e16a8779948a100890dae8f1373616e55436c4a24c935ac31a2fc792202b`）
-   - 导出产物：
-     - `dist/outlook-email-plus-v1.14.0-docker.tar`
-     - `dist/outlookEmailPlus-v1.14.0-src.zip`
+**修改文件**：
+- `templates/token_tool.html`
+- `static/js/features/token_tool.js`
+- `static/css/token_tool.css`
+- `static/js/i18n.js`
+- `tests/test_oauth_tool.py`
 
-4. 发布到 GitHub Release
-   - 提交：`fa795b8`（`docs(release): v1.14.0`）
-   - 推送：`main` + tag `v1.14.0`
-   - Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.14.0`
-   - 已上传附件：
-     - `outlook-email-plus-v1.14.0-docker.tar`（204,254,208 bytes）
-     - `outlookEmailPlus-v1.14.0-src.zip`（3,216,216 bytes）
+**测试结果**：
+- `python -m pytest tests/test_oauth_tool.py -v` → 71 passed
+- `python -m pytest tests/ -q` → 1001 passed, 10 skipped, 2 warnings
 
-**CI/CD 核对（对应 commit: `fa795b8`）**：
+**本地服务**：
+- PID 11436，`http://127.0.0.1:5000/login` HTTP 200
 
-- ✅ Python Tests：Run `24186894407`
-- ✅ SonarCloud Scan：Run `24186894434`
-- ❌ Code Quality：Run `24186894405`
-  - 失败点：Black 格式检查（示例日志显示 `outlook_web/controllers/temp_emails.py`、`outlook_web/db.py` 将被重排）
-- ❌ Build and Push Docker Image（main）：Run `24186894400`
-  - 原因：`quality-gate` 失败，`build-and-push` 被跳过
-- ❌ Build and Push Docker Image（tag v1.14.0）：Run `24186895639`
-  - 原因同上
-- ✅ Create GitHub Release：Run `24186895629`
+---
 
-**镜像仓库核对**：
+## 2026-04-12
 
-- Docker Hub：`docker manifest inspect guangshanshui/outlook-email-plus:v1.14.0`
-  - 结果：`no such manifest`
-- GHCR：`docker manifest inspect ghcr.io/zeropointsix/outlook-email-plus:v1.14.0`
-  - 结果：`manifest unknown`
+### 操作记录
+
+#### 27. 输出“微软云配置自动化提示词”文件，供其他 AI 直接执行云端配置
+
+**时间**：2026-04-12
+
+**本次操作**：
+- 在项目目录新增：
+  - `docs\\微软云配置自动化提示词.md`
+
+**文件用途**：
+- 让其他 AI 只处理微软云端配置
+- 自动完成：
+  - audience
+  - public client
+  - redirect URI
+  - API permissions
+- 明确声明：
+  - personal account 的最终登录 / consent / refresh_token 获取仍需人工交互
+
+**联动更新**：
+- 已在 `docs\\OAuth-Token工具兼容导入踩坑总结.md` 中补上对这份提示词文件的引用
+- 已同步更新会话 `plan.md` 与 `WORKSPACE.md`
+
+#### 26. 评估“微软 CLI / API + AI 自动完成配置”的可行边界
+
+**时间**：2026-04-12
+
+**调研结论**：
+- 可以自动化的部分：
+  - App Registration 创建 / 更新
+  - `signInAudience`
+  - public redirect / public client 开关
+  - API permissions 增删
+  - 组织租户下的 admin consent（如适用）
+- 不能完全自动化的部分：
+  - personal Microsoft account 的首次交互式登录
+  - delegated 权限的首次 consent
+  - 最终 refresh_token 的实际颁发
+
+**更现实的方案**：
+- AI 负责 Azure 配置与差异检查
+- 用户只做一次浏览器登录授权
+- AI 再接管本地 token 校验、写入账号、错误诊断
+
+**本次同步动作**：
+- 已将这部分内容补入 `docs\\OAuth-Token工具兼容导入踩坑总结.md`
+- 已同步更新会话 `plan.md` 与 `WORKSPACE.md`
+
+#### 25. 输出会话专用踩坑总结文件，供后续写教程使用
+
+**时间**：2026-04-12
+
+**本次操作**：
+- 按用户要求，最终将专用总结文件写入项目目录而非用户目录：
+  - `E:\\hushaokang\\Data-code\\EnsoAi\\outlookEmail\\Buggithubissue\\docs\\OAuth-Token工具兼容导入踩坑总结.md`
+
+**文件内容**：
+- 最终跑通时的微软侧配置
+- 当前项目兼容导入模式的真实约束
+- 本次所有关键错误码与根因映射
+- 已在项目中完成的收口
+- 最终验证结果
+- 后续写教程时建议强调的顺序
+
+#### 24. 权限放开后，邮件拉取已成功；日志确认此前是“受众 + Scope + API permissions”三重叠加
+
+**时间**：2026-04-12
+
+**本次结果**：
+- 用户确认已经在微软侧放开邮箱权限，并成功拉取邮件
+- 日志显示：
+  - `/api/token-tool/exchange` → `200`
+  - `/api/token-tool/save` → `200`
+  - `/api/emails/zerodotsix@outlook.com?...` → `200`
+
+**从失败到成功的完整结论**：
+- Graph 侧曾出现 `AADSTS9002331`：说明 Supported account types 不能收窄到 `PersonalMicrosoftAccount`
+- IMAP 侧曾出现 `AADSTS70000`：说明旧 Graph 默认 Scope 残留或 IMAP 权限未放开
+- Graph 侧还出现过 `ErrorAccessDenied`：说明邮箱读取权限本身也未完全放开
+
+**最终踩坑总结**：
+- 受众要用 `AzureADandPersonalMicrosoftAccount`
+- 平台要走 Public Client / Mobile and desktop applications
+- Scope 要切到 IMAP 预设并重新授权
+- Azure API permissions 至少要补：
+  - `Office 365 Exchange Online → IMAP.AccessAsUser.All`
+- 如果还希望 Graph 链路也可用，再补：
+  - `Microsoft Graph → Mail.Read`
+
+**附带发现**：
+- 日志里仍有一个独立问题：`/api/emails/.../extract-verification` 触发了 `AttributeError: 'str' object has no attribute 'get'`
+- 这个 500 不影响本次邮件列表拉取成功，但属于后续可单独修复的旁路问题
+
+#### 23. 按最新运行时诊断再次重启本地服务
+
+**时间**：2026-04-12
+
+**原因**：
+- 在读取运行日志、修正保存失败引导与旧 Scope 兼容映射后，原服务进程仍停留在旧代码
+
+**本次操作**：
+- 停止了当前占用 5000 端口的旧进程
+- 重新启动本地服务，新 PID `44800`
+- 验证：`http://127.0.0.1:5000/login` 返回 `HTTP 200`
+
+#### 22. 运行日志确认当前保存的 Scope 仍是旧 Graph 默认值
+
+**时间**：2026-04-12
+
+**日志与配置结论**：
+- 运行日志显示：
+  - Graph：`AADSTS9002331`（受众过窄，仍与 `/common` 冲突）
+  - IMAP：`AADSTS70000`（scope 未授权 / 过期）
+- 进一步读取当前工具配置后确认：
+  - `oauth_tool_scope = offline_access https://graph.microsoft.com/.default`
+
+**确认结论**：
+- 当前 IMAP 失败不是“refresh_token 本身坏了”
+- 更直接的原因是：用户这次授权仍在沿用旧的 Graph 默认 Scope，没有切回 IMAP 兼容预设
+- 因此兼容导入模式下，需要：
+  - 将受众切到 `AzureADandPersonalMicrosoftAccount`
+  - 将 Scope 切回 IMAP 预设
+  - 重新授权后再写入账号
+
+**本次同步动作**：
+- `get_config()` 现在会把历史遗留的 Graph 默认 Scope 自动映射回 IMAP 默认值，降低旧配置残留导致的重复踩坑概率
+- 新增自动化用例覆盖这条“旧 Graph 默认 Scope → IMAP 默认值”的兼容映射
+- 更新页面说明、README、会话 plan 和 `WORKSPACE.md`
+
+**针对性回归**：
+- `python -m pytest tests/test_oauth_tool.py -v -k "legacy_graph_scope or common_endpoint_guidance"` → `2 passed`
+
+#### 21. `AADSTS9002331` 证明受众不能收窄到 PersonalMicrosoftAccount
+
+**时间**：2026-04-12
+
+**实际现象**：
+- 授权已成功，用户进入“写入账号”弹窗
+- 保存前 token 验证失败，错误为：
+  - `AADSTS9002331`
+  - `Application ... is configured for use by Microsoft Account users only. Please use the /consumers endpoint to serve this request.`
+
+**确认结论**：
+- 这说明兼容导入模式不能把应用受众收窄到 **PersonalMicrosoftAccount**
+- 因为系统当前写入前验证与部分运行链路仍依赖 `/common`
+- 因此与现有模型兼容的正确受众，应是：
+  - **Accounts in any identity provider or organizational directory and personal Microsoft accounts**
+  - 即 `AzureADandPersonalMicrosoftAccount`
+
+**本次同步动作**：
+- 更新 `save_to_account()` 的失败引导：遇到 `AADSTS9002331` 时，明确提示把 Supported account types 改为 `AzureADandPersonalMicrosoftAccount`
+- 新增自动化用例覆盖该引导分支
+- 更新页面说明、README、会话 plan 和 `WORKSPACE.md`，撤回此前“PersonalMicrosoftAccount 也可作为推荐选项”的过宽口径
+
+**针对性回归**：
+- `python -m pytest tests/test_oauth_tool.py -v -k "common_endpoint_guidance or invalid_client or unauthorized_client"` → `3 passed`
+
+#### 20. 用户最新 manifest 已修正一半，剩余卡点集中在 Web 回调平台
+
+**时间**：2026-04-12
+
+**用户反馈的最新 manifest**：
+- `allowPublicClient = true` ✅
+- `signInAudience = "PersonalMicrosoftAccount"` ✅
+- `accessTokenAcceptedVersion = 2` ✅
+- 但 `replyUrlsWithType` 仍然只有：
+  - `http://localhost:5000/token-tool/callback`（`type = "Web"`）
+
+**字段级结论**：
+- 这说明 audience / public-client 开关已经改对了一半
+- 当前仍然不符合兼容导入模式的关键点，是**回调平台仍停留在 Web**
+- 在这种情况下，Azure 继续把当前链路视为机密 Web 客户端、继续要求 `client_secret` 是符合现象的
+
+**下一步建议**：
+- 不再继续围绕 Web 回调调整
+- 改用 **Mobile and desktop applications** 的 public redirect
+- 若 Azure 门户允许，优先直接登记 `http://localhost:5000/token-tool/callback` 这类本地 callback URI；`http://localhost` 作为后备 public redirect
+- 在工具里把 Redirect URI 改成相同值，并使用**手动粘贴回调 URL**完成 exchange
+
+#### 19. `invalid_client` + “必须提供 client_secret” 反映的是平台类型错位
+
+**时间**：2026-04-12
+
+**实际现象**：
+- 用户重新测试后收到：
+  - `invalid_client`
+  - `AADSTS70002: The provided request must include a 'client_secret' input parameter`
+
+**当前判断**：
+- 这不应再解读成“Client ID 无效或应用被删除”
+- 更符合当前上下文的解释是：Azure 仍把当前 redirect/platform 视为**机密 Web 客户端**
+- 也就是说，即使 audience、public client 开关已经调整过，只要还在走 Web 平台回调，Azure 仍可能继续要求 `client_secret`
+
+**本次同步动作**：
+- 更新 `oauth_tool.py` 的 `invalid_client` 引导文案，改成 public client / redirect 平台错位说明
+- 更新 `templates/token_tool.html` 与 README：若仍被要求 `client_secret`，改用 **Mobile and desktop applications** 平台的 public redirect（如 `http://localhost`），并在工具里走手动粘贴回调 URL
+- 将该结论写入会话 plan 与 `WORKSPACE.md`，作为后续人工测试的主诊断方向
+
+**针对性回归**：
+- `python -m pytest tests/test_oauth_tool.py -v -k "invalid_client or unauthorized_client"` → `2 passed`
+
+#### 18. `ms-sso.copilot.microsoft.com/processcookie` 跳转属于浏览器侧干扰
+
+**时间**：2026-04-12
+
+**实际现象**：
+- 用户登录 Microsoft 账号后，没有直接回到 Azure / 本地回调
+- 浏览器跳到：
+  - `ms-sso.copilot.microsoft.com/processcookie?...`
+- 页面报错：
+  - `ERR_CONNECTION_CLOSED`
+
+**当前判断**：
+- 这个域名不在我们应用的 OAuth 回调链路中
+- 它更像是浏览器 / Copilot / Microsoft SSO 的 cookie 处理辅助跳转
+- 因此这一步优先按**浏览器环境问题**处理，而不是继续修改本地代码或 Azure App Registration
+
+**建议排查方向**：
+- 使用无插件的隐身窗口 / Guest Profile / 另一浏览器重试
+- 清理 `live.com`、`microsoftonline.com`、`copilot.microsoft.com` 相关 cookie
+- 暂时关闭代理、VPN、杀软 HTTPS 检查、浏览器扩展后再试
+- 若在新浏览器或新网络下恢复正常，可基本确认是本机浏览器环境干扰
+
+#### 17. 基于用户提供的 Azure manifest 样本做字段级诊断
+
+**时间**：2026-04-12
+
+**用户提供的 manifest 关键信息**：
+- `signInAudience = "PersonalMicrosoftAccount"` → 这一项已经对了
+- `accessTokenAcceptedVersion = 2` → token 版本前置约束已经满足
+- `allowPublicClient = null` → 兼容导入模式下应显式开启为 public client
+- `replyUrlsWithType` 当前只有 `http://localhost:5000/token-tool/callback`
+
+**字段级结论**：
+- 需要重点改的是 **`allowPublicClient`**：应设为启用（Portal 中对应 `Allow public client flows = Yes`）
+- Redirect URI 最好同时注册：
+  - `http://127.0.0.1:5000/token-tool/callback`
+  - `http://localhost:5000/token-tool/callback`
+- `passwordCredentials` 可以保留，但当前兼容导入模式不会使用它
+- IMAP 兼容链路建议通过 Portal 的 **API permissions** 补充 Exchange Online 的委托权限，而不是直接手改 manifest GUID
+
+**本次同步动作**：
+- 更新页面配置指引，明确本地建议同时注册 `127.0.0.1` 与 `localhost` 两个 Redirect URI
+- 将 manifest 样本分析结果写入会话 plan 与 WORKSPACE，便于后续继续排查
+
+#### 16. Azure 门户切换 consumers 时的 manifest 前置约束补充
+
+**时间**：2026-04-12
+
+**实际现象**：
+- 用户在把应用切换为支持个人 Microsoft 账号时，Azure 门户报错：
+  - `Property api.requestedAccessTokenVersion is invalid`
+
+**确认结论**：
+- 这是 Azure App Registration 的 manifest 约束，不是本地代码问题
+- 当应用要支持个人 Microsoft 账号（`PersonalMicrosoftAccount` / `AzureADandPersonalMicrosoftAccount`）时，`api.requestedAccessTokenVersion` 必须为 `2`
+- 正确处理顺序是：先到 **Manifest** 把 `api.requestedAccessTokenVersion` 改成 `2`，保存后再去切换 Supported account types
+
+**本次同步动作**：
+- 更新页面内 Azure 配置提示，补上 `requestedAccessTokenVersion=2` 的前置说明
+- 更新 README / OAuth Tool 相关 PRD / FD / TD / TDD / TODO / 会话 plan，保证文档与当前实际限制一致
+
+#### 15. 根据实际 `unauthorized_client` 结果补齐微软侧配置口径
+
+**时间**：2026-04-12
+
+**实际现象**：
+- 在兼容账号导入模式下继续人工测试时，Microsoft 返回：
+  - `unauthorized_client`
+  - `The client does not exist or is not enabled for consumers`
+
+**确认结论**：
+- 当前模式不仅要求 `tenant=consumers`、Public Client、无 `client_secret`
+- 还要求 Azure App Registration 的 **Supported account types 必须包含个人 Microsoft 账号**
+- 如果应用只面向组织目录 / 单租户组织账号，即使前端和后端配置都改成兼容模式，授权前也会直接失败
+
+**本次同步动作**：
+- 更新 `oauth_tool.py` 的 `unauthorized_client` 引导文案：明确提示“支持个人 Microsoft 账号 + 开启公共客户端流”
+- 更新 `templates/token_tool.html` 的 Azure 配置指引：显式写出 Supported account types 的可选项与禁区
+- 更新 README / README.en 与 OAuth Tool 相关 PRD / FD / TD / TDD / TODO 顶部说明，使文档与这次真实报错保持一致
+
+**针对性回归**：
+- `python -m pytest tests/test_oauth_tool.py -v -k unauthorized_client` → `1 passed`
+
+#### 14. OAuth Token 工具收口到兼容账号导入模式（专项 + 全量回归通过）
+
+**时间**：2026-04-12
+
+**本轮实现**：
+- 前端页面与侧边栏入口统一改为“兼容账号 Token 导入”口径，Client Secret 改为禁用提示，Tenant 固定为 `consumers`
+- `token_tool.js` 统一按兼容模式收集表单：`client_secret` 强制空字符串，`tenant` 强制 `consumers`，默认 Scope 切换到 IMAP 兼容预设
+- `token_tool.py` 在 `prepare_oauth()`、`save_config()`、`save_to_account()` 增加兼容模式硬校验，直接拒绝非空 `client_secret` 与非 `consumers` tenant
+- `graph.py` 与 `oauth_tool.py` 清理上一轮 tenant/client_secret-aware 临时链路，回到现有账号运行模型
+- `tests/test_oauth_tool.py` 同步改为兼容模式口径：新增 prepare/config/save 的拒绝分支断言，配置返回固定空 `client_secret` 与 `consumers` tenant，并补充 IMAP 默认 Scope 断言
+
+**当前判断**：
+- Token 工具不再承诺“任意 Azure 应用上下文导入”，而是收敛为与现有购买账号同模型的导入入口
+- 这轮改动用于在工具阶段就拦截不兼容账号，避免保存成功后才在运行态 `GRAPH_TOKEN_FAILED` / `IMAP_TOKEN_FAILED`
+
+**专项回归**：
+- `python -m pytest tests/test_oauth_tool.py -v` → `64 passed`
+
+**全量回归**：
+- `python -m pytest tests/ -v` → `994 passed, 10 skipped, 2 warnings`
+
+**服务同步**：
+- 已停止旧服务 PID `12592`
+- 已按当前代码重启本地服务，新 PID `31192`
+- `http://127.0.0.1:5000/login` 返回 `HTTP 200`
+
+#### 15. OAuth Token 获取工具审查提示词（v1.0）
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 基于两轮代码审查经验，为 OAuth Token 获取工具编写专项审查提示词
+- 目标：可交给其他 AI 对该功能实现进行独立审查
+
+**产出**：
+- `docs/DEV/oauth-token-review-prompt.md` — OAuth Token 功能专项审查提示词 v1.0
+- 包含：全部 TD 函数签名/路由/配置表、6 项关键技术约束、八维度检查清单、TDD 13 类 59 用例映射
+- 审查重点：功能实现正确性（TD 逐函数比对）+ 回归安全性（测试覆盖有效性）
+
+---
+
+#### 14. OAuth Token 获取工具第二轮代码审查（v1.15.0）
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 第一轮审查发现 3 条 Watch Items（均 LOW）
+- 另一 AI 完成保守加固（Scope Chip DOM 创建 + client_secret 兼容策略）后进行第二轮审查
+
+**审查范围**：
+- 核心后端 6 + 前端 5 + 测试 1 + 发布/文档 7 = 19 个文件
+- 八维度深度审查：TD/TDD 一致性、OAuth 安全链路、配置安全、账号写入链路、前后端契约、XSS/注入/泄露、测试覆盖、发布文档一致性
+
+**审查结论**：
+- **Must-Fix: 0 条**
+- **Watch Items: 1 条（LOW）**：`exchange_token` 中 state 不匹配分支缺少直接单元测试
+- **结论: Merge-Ready**
+
+**验收数据**：
+- `python -m pytest tests/test_oauth_tool.py -v` → `59 passed`
+- `python -m pytest tests/ -v` → `989 passed, 10 skipped, 2 warnings`
+
+**加固确认**：
+- ✅ Scope Chip: `document.createElement()` + `data-scope` + 事件委托
+- ✅ client_secret: 明文→直接返回 / `enc:` 正常→解密 / `enc:` 损坏→返回空串
+- ✅ 新增 2 个专项测试覆盖上述加固
+
+---
+
+#### 13. OAuth Token 工具方向收敛：改为兼容账号导入模式（规划阶段）
+
+**时间**：2026-04-12
+
+**背景判断**：
+- 通过人工测试确认：Token 工具虽然已能完成授权、换 token、保存前验证与账号写入，但“购买账号”运行模型与“用户自备 Azure 应用导入账号”并不是同一类型
+- 现有运行态默认只表达 `client_id + refresh_token`，而用户自备 Azure 应用可能还要求 tenant / client_secret / 单租户上下文
+- 继续在运行时对单租户 / 机密客户端逐点打补丁，会持续扩大复杂度并破坏旧模型稳定性
+
+**本次规划结论**：
+- 不再以“支持任意 Azure 应用导入”为目标
+- 改为“**兼容账号导入模式**”：只允许导入与现有购买账号运行模型一致的账号
+- 兼容模式口径暂定为：`tenant=consumers`、public client、无需 client_secret、不依赖账号级 tenant/secret 运行态上下文
+
+**规划动作**：
+- 已创建会话级 `plan.md`
+- 已拆分后续收敛任务：前端收敛、后端硬校验、测试口径调整、文档统一、临时兼容逻辑清理
+- 当前阶段仅完成方案收敛与计划编写，尚未开始按兼容模式改代码
 
 **结论**：
-- v1.14.0 的 GitHub Release 页面和附件已就绪；
-- 但 DockerHub/GHCR 的 `v1.14.0` 镜像尚未发布成功，需先修复格式门禁（Black）后重新触发 Docker 工作流。
+- 后续实现方向从“扩运行态支持更多 OAuth 模型”转为“收缩 Token 工具输入边界，使导入账号与购买账号模型一致”
+- 该方向更符合当前项目既有运行模型，也更利于控制复杂度
+
+#### 12. OAuth Token 工具写入前 client_secret 校验链路修复
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 在 tenant-aware 修复之后，保存前 refresh token 校验继续报 `AADSTS7000218`
+- 排查确认：保存接口虽然已经带上了 `tenant`，但验证请求仍然没有带 `client_secret`
+- 对于机密客户端（confidential client），这会导致保存前验证阶段直接要求 `client_secret` / `client_assertion`
+
+**本次修复**：
+
+1. client_secret 贯通保存链路
+   - `static/js/features/token_tool.js` 在保存 payload 中补充提交 `client_secret`
+   - `outlook_web/controllers/token_tool.py` 在 `save_to_account()` 中接收 `client_secret`
+   - 仅当实际有值时，才向底层验证函数传递 `client_secret`
+
+2. 保存前验证支持机密客户端
+   - `outlook_web/services/graph.py` 的 `test_refresh_token_with_rotation()` 增加可选 `client_secret`
+   - 当页面已配置 secret 时，保存前 refresh token 校验将一并携带该 secret
+
+3. 回归与运行态同步
+   - `tests/test_oauth_tool.py` 新增 client-secret-aware 保存验证测试
+   - `python -m pytest tests/test_oauth_tool.py -v` → `62 passed`
+   - 本地服务已重启并确认 `http://127.0.0.1:5000/login` 返回 `HTTP 200`
+
+**结论**：
+- 机密客户端现在不会再因为保存前验证缺少 `client_secret` 而卡在 `AADSTS7000218`
+- 当前人工测试环境已更新到最新代码，可继续刷新页面验证完整“获取 token → 写入账号”链路
+
+#### 11. OAuth Token 工具写入前 tenant-aware 验证修复
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 人工测试中，Token 获取已经成功，但写入账号前的 refresh_token 验证报错：应用在目录 `Microsoft Accounts` 中不存在
+- 排查确认：OAuth Tool 前面的授权链路按当前表单 Tenant 成功获取了 token，但保存前验证复用了 `graph.py` 里写死 `common` 的旧校验端点
+- 对于单租户 Azure 应用，这会把本应在指定租户里验证的 token 错误地拿去 `common / Microsoft Accounts` 上验证，从而导致保存失败
+
+**本次修复**：
+
+1. tenant 贯通保存链路
+   - `outlook_web/services/oauth_tool.py` 的 token 结果中补充返回 `tenant`
+   - `static/js/features/token_tool.js` 在保存 payload 中补充提交 `tenant`
+   - `outlook_web/controllers/token_tool.py` 在 `save_to_account()` 中接收 `tenant`
+
+2. 保存前验证 tenant-aware
+   - `outlook_web/services/graph.py` 新增按 tenant 生成 token 端点的能力
+   - `test_refresh_token_with_rotation()` 增加可选 `tenant` 参数
+   - 保存前验证不再固定走 `common`，而是按当前 OAuth 实际 tenant 发起 refresh token 校验
+
+3. 回归与运行态同步
+   - `tests/test_oauth_tool.py` 新增 tenant-aware 保存验证测试
+   - `python -m pytest tests/test_oauth_tool.py -v` → `61 passed`
+   - 本地服务已重启并加载最新代码，`http://127.0.0.1:5000/login` 返回 `HTTP 200`
+
+**结论**：
+- 单租户 Azure 应用现在不会再因为保存前验证错误落到 `Microsoft Accounts/common` 而写入失败
+- 当前人工测试环境已切到最新代码，可继续刷新页面验证“获取 token → 写入账号”完整链路
+
+#### 10. OAuth Token 工具写入账号弹窗错误可视化修复
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 人工测试中，OAuth Token 已成功获取，但点击“写入到账号 → 确认写入”后，界面看起来像“按钮没有反应”
+- 通过运行中的服务日志确认，前端实际上已经多次请求 `POST /api/token-tool/save`，且后端返回 `400`
+- 根因不是按钮失效，而是前端把错误提示输出到了弹窗外的主状态栏，用户在 modal 打开状态下看不到
+
+**本次修复**：
+
+1. 弹窗内错误反馈
+   - 在 `templates/token_tool.html` 的保存弹窗中新增独立状态区
+   - `static/js/features/token_tool.js` 新增弹窗级 `showSaveDialogStatus()` / `clearSaveDialogStatus()`
+   - 保存校验失败、账号列表加载失败、保存接口返回错误时，统一在弹窗内直接展示提示
+
+2. 样式与运行态同步
+   - `static/css/token_tool.css` 增加弹窗状态区样式
+   - 本地服务重启后再次确认 `http://127.0.0.1:5000/login` 返回 `HTTP 200`
+
+**验收结果**：
+- `python -m pytest tests/test_oauth_tool.py -v` → `60 passed`
+- 本地服务已重启并加载最新前端代码
+
+**结论**：
+- 当前“确认写入像没反应”的表现已被修正为“错误直接在弹窗内可见”
+- 后续若再出现写入失败，用户将能直接看到真实后端返回信息，方便继续定位业务原因
+
+#### 9. OAuth Token 工具人工测试前回归与服务拉起
+
+**时间**：2026-04-12
+
+**本次操作**：
+
+1. 全量回归确认
+   - 再次执行 `python -m pytest tests/ -v`
+   - 结果为 `990 passed, 10 skipped, 2 warnings`
+   - warnings 仍是 `tests/test_live_credentials.py` 里既有的 `return bool` 提示，非本轮引入
+
+2. 本地服务启动
+   - 使用项目默认入口 `python start.py` 启动 Flask 服务
+   - 通过 PowerShell `Start-Process` 挂起进程并保留 stdout/stderr 日志
+   - 启动后确认服务监听 `127.0.0.1:5000`
+
+3. 连通性检查
+   - 对 `http://127.0.0.1:5000/login` 发起本地请求
+   - 返回 `HTTP 200`，登录页 HTML 正常返回
+
+**结论**：
+- 当前代码已完成最新一轮全量回归
+- 本地人工测试服务已成功拉起，可直接基于 `http://127.0.0.1:5000` 继续手工验证
+
+#### 8. OAuth Token 获取工具审查后保守加固与二次回归（v1.15.0）
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 在 OAuth Token 工具主功能落地并通过初轮回归后，针对审查结果继续做一轮保守优化
+- 本轮明确不改动 `save_to_account()` 的 TD 主路径，只处理不影响既有设计链路的安全性与兼容性项
+
+**本次处理内容**：
+
+1. 前端安全加固
+   - `static/js/features/token_tool.js` 中的 Scope Chip 改为 `document.createElement()` 构建
+   - 删除动态 scope 值拼接到 `onclick` 的做法，改为 `data-scope` + 容器事件委托
+
+2. 配置兼容性明确化
+   - `outlook_web/repositories/settings.py` 中的 `get_oauth_tool_client_secret()` 显式区分明文与 `enc:` 值
+   - 历史明文配置直接返回；不可解密的加密值继续隐藏为空字符串，避免把损坏密文回显到页面
+
+3. 测试与文档同步
+   - `tests/test_oauth_tool.py` 新增 3 个回归用例（2 个配置读取 + 1 个 state mismatch 直接覆盖）
+   - `CHANGELOG.md` 与 `WORKSPACE.md` 同步补充本轮审查后加固记录
+
+**验收结果**：
+- `python -m pytest tests/test_oauth_tool.py -v` → `60 passed`
+- `python -m pytest tests/ -v` → `990 passed, 10 skipped, 2 warnings`
+- warnings 仍来自 `tests/test_live_credentials.py` 中已有的 `return bool` 写法，非本轮引入
+
+**结论**：
+- OAuth Token 工具在不偏离 TD 主路径的前提下完成了一轮审查后保守加固
+- 前端动态事件拼接风险已收敛，`client_secret` 配置读取策略也与当前实际行为保持一致
+
+#### 1. OAuth Token 获取工具 PRD 编写（Issue #38, #34）
+
+**时间**：2026-04-12
+
+**问题背景**：
+- Issue #38、#34 多位用户反馈需要内置 refresh_token 获取功能
+- 旧版本该功能因设计复杂被废弃,但社区需求持续存在
+- 旧版本内置 client_id 导致 unauthorized_client 报错（Issue #26, #20）
+
+**讨论与决策**：
+
+1. 方案评估
+   - 方案 A: 深度集成 OAuth 页面 — 耦合度高,维护成本大
+   - **方案 B: 松耦合集成**（✅ 采纳）— 独立 Blueprint 模块,可启用/禁用
+   - 方案 C: 不内置,仅对接外部工具 — 体验割裂
+
+2. 参考分析
+   - 分析了博客文章「Python实现Microsoft邮件自动化：OAuth2.0认证与邮件处理详细指引」
+   - 分析了 QuickMSToken 项目（somnifex/QuickMSToken）源码实现
+   - 分析了现有代码库 token 刷新架构（graph.py、refresh.py）
+
+3. 核心设计决策
+   - 用户自备 client_id,不内置默认值
+   - 支持 Authorization Code + PKCE 流程
+   - 支持手动回调 URL 粘贴（兼容 Docker/反代部署）
+   - 获取 token 后可一键写入系统账号
+
+**产出文档**：
+- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
+
+**补充内容（v1.1）**：
+- 新增 2.6 节: Token 工具与现有导入功能的定位区分
+- 新增 2.7 节: 8 种常见 OAuth 错误的中文提示与解决引导
+- 扩展 7.2 节: Azure 应用注册指引改为分步骤详细说明（含直达链接）
+- 新增 Tenant 租户选择器需求（consumers/common/organizations + 自定义）
+- 更新 UI 布局图增加快速指引卡片和 Tenant 下拉
+- 补充验收标准 A-07（Azure 指引）、A-08（多租户）
+
+**结论**：
+- PRD 已完成 v1.1 版,涵盖产品背景、核心需求、用例、错误引导、安全、部署兼容性等完整内容
+- PRD 已在 FD 讨论后更新为 v1.2，补充页面形态决策和配置持久化策略
+
+#### 2. OAuth Token 获取工具 FD 编写
+
+**时间**：2026-04-12
+
+**讨论与决策**：
+
+1. 分析现有代码架构
+   - Flask Blueprint 工厂模式（`create_blueprint()` + `add_url_rule()`）
+   - 原生 JS SPA 前端（`navigate()` 页面切换）
+   - `@login_required` Session 认证 + Flask-WTF CSRF
+   - MVC 分层: routes → controllers → services → repositories
+
+2. 分析 QuickMSToken 源码（app.py 731 行）
+   - PKCE 生成: `secrets.token_urlsafe(64)` + SHA256
+   - 内存 OAUTH_FLOW_STORE + 线程锁 + 20 分钟 TTL
+   - 双模式: page 模式自动回调 + popup 模式手动粘贴
+   - Scope 校验: 单资源限制、`.default` 混用检测
+   - JWT 不验签解码（仅展示 audience/scope）
+
+3. FD 关键设计决策
+   - **页面形态**: 浏览器新窗口 `window.open()`（D1 方案）
+   - **回调处理**: 智能回调,优先自动降级手动（Q2-A）
+   - **结果传递**: 用户手动复制回调 URL 到主页面（Q3-A，QuickMSToken 方式）
+   - **配置持久化**: 服务端 Settings 表,key 前缀 `oauth_tool_`（Q4-B）
+
+4. 前后端模块设计
+   - 后端: 新增 Blueprint `token_tool`（8 个路由）+ Controller + Service（`oauth_tool.py`）
+   - 前端: 独立模板 `token_tool.html` + `token_tool.js` + `token_tool.css`
+   - 回调页: `popup_result.html`（极简,仅显示复制提示或错误引导）
+
+**产出文档**：
+- `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
+- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`（v1.2 更新）
+
+**结论**：
+- FD 已完成 v1.0,涵盖系统架构、数据流、接口设计、前端设计、安全设计、环境变量等完整内容
+- 可直接进入开发阶段
+
+#### 3. OAuth Token 获取工具 TD 编写
+
+**时间**：2026-04-12
+
+**代码库深度分析**：
+
+1. 应用工厂与 Blueprint 注册
+   - `app.py`: 12 个 Blueprint 无条件注册（lines 138-150），本期首例条件注册
+   - Context Processor `inject_app_version()` 注入 `APP_VERSION`（lines 80-82）
+   - CSRF 全局保护 `CSRFProtect`（line 109），部分 Blueprint 传入 `csrf_exempt`
+
+2. 现有 Token 操作体系
+   - `graph.py`: `TOKEN_URL_GRAPH` 使用 `/common/` 硬编码 tenant（line 11）
+   - `get_access_token_graph_result()` 使用 `grant_type=refresh_token`（lines 46-106）
+   - `test_refresh_token_with_rotation()` 返回 `(success, error, new_refresh_token)` 三元组（lines 255-293）
+   - Token 工具将使用 `grant_type=authorization_code`，复用验证函数
+
+3. 加密/配置/Settings 现状
+   - `crypto.py`: `encrypt_data()` 使用 `enc:` 前缀标识 + Fernet 加密（lines 66-80）
+   - `config.py`: `_getenv()` + `env_true()` 模式（lines 6-55）
+   - `settings.py`: `get_setting()` / `set_setting()` + typed getter 模式（已有 CF Worker 先例）
+   - `errors.py`: 已有 8 个 OAuth 相关错误码（lines 49-56, 95-102）
+
+4. 账号管理
+   - `accounts_repo.add_account()`: 自动 `encrypt_data(refresh_token)`（lines 157-236）
+   - `accounts_repo.update_account()`: None 参数不覆盖现有值（lines 239-339）
+   - DB Schema v19，本期无需升级
+
+**核心技术决策**:
+
+| 编号 | 决策 | 选定方案 | 理由 |
+|------|------|---------|------|
+| TD-01 | Schema 变更 | 无需升级（保持 v19） | Settings 表 INSERT OR REPLACE 自动处理，accounts 字段够用 |
+| TD-02 | 配置读取 | settings.py 新增 getter 函数 | 与 CF Worker getter 模式一致，封装优先级链 |
+| TD-03 | CSRF 策略 | 标准流程，不 exempt | 独立模板 Jinja2 注入 csrf_token，GET 请求天然不受 CSRF 保护 |
+| TD-04 | FLOW_STORE 位置 | services/oauth_tool.py 内部 | 紧耦合于 OAuth 流程，Service 自包含模式 |
+| TD-05 | Blueprint 注册 | 条件注册（env_true 模式） | 默认 OAUTH_TOOL_ENABLED=true，遵循 PRD 开箱即用要求 |
+
+**产出文档**：
+- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
+
+**结论**：
+- TD 已完成 v1.0，涵盖代码级实现细节：config/settings/service/controller/routes/templates/JS 完整伪代码
+- 11 个章节：文档目标、技术现状、核心决策、后端实现（7 个文件）、前端实现（4 个文件）、安全设计、错误处理、测试策略、实施计划（4 里程碑）、风险缓解、未来优化
+- 与 FD 的区别：TD 精确到行号级代码引用、函数签名、变量命名、参数约束，可直接指导开发
+
+#### 4. PRD/FD/TD 文档联调
+
+**时间**：2026-04-12
+
+**发现的问题与修复**：
+
+1. **PRD 版本号不一致**（严重度: 中）
+   - 问题: PRD 头部标记为 `v1.0`，但实际已经过两次更新（v1.1 补充, v1.2 FD 联动更新）
+   - 修复: 更新为 `v1.3`（含本次联调修正）
+   - 新增 FD/TD 关联文档引用
+
+2. **PRD §4.4 与 FD/TD 的 client_secret 存储策略矛盾**（严重度: 高）
+   - 问题: PRD 明确写 "❌ 不存储 client_secret 到数据库或文件"，但 FD §8.1 和 TD §3.1 设计为 Settings 表加密存储
+   - 原因: FD 讨论阶段（Q4-B 决策）选定了服务端 Settings 表持久化方案，PRD 未同步更新
+   - 修复: 删除 PRD §4.4 中该条约束，补充 v1.2 更新说明；同步更新 §5.1 安全表述
+
+3. **TD save_to_account() 使用了错误的 update_account() 调用方式**（严重度: 高）
+   - 问题: TD 伪代码传入 `email_addr=None, group_id=None, remark=None`，但 `update_account()` 要求这三个参数为必填（`str`/`int`/`str`），传 None 会触发 `if not email_addr → return False`
+   - 修复: 改为先通过 `get_account_by_id()` 获取现有数据，将原字段回传，仅替换 `client_id`/`refresh_token`/`status`
+   - 更新 Q1 说明，纠正 "None 值不覆盖" 的错误描述
+
+4. **TD get_account_list() 调用了不存在的函数**（严重度: 高）
+   - 问题: TD 使用 `accounts_repo.get_all_accounts()`，但 accounts.py 中该函数不存在
+   - 实际函数: `accounts_repo.load_accounts()`（line 47，返回全部账号含解密字段）
+   - 修复: 替换为 `load_accounts()`，补充安全说明（仅提取 4 个非敏感字段返回前端）
+
+5. **FD §7.2/§7.3 与 TD 的配置引用方式不一致**（严重度: 中）
+   - 问题: FD 使用 `from outlook_web.config import OAUTH_TOOL_ENABLED`（常量导入），TD 使用 `app_config.get_oauth_tool_enabled()`（函数调用）
+   - 修复: FD 统一改为函数调用方式（因 config.py 定义的是函数而非常量）
+
+6. **FD 缺少 TD 关联引用**（严重度: 低）
+   - 修复: FD 头部新增 `关联 TD` 字段
+
+**产出变更**：
+- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md` → v1.3（修复 #1, #2）
+- `docs/FD/2026-04-12-OAuth-Token获取工具FD.md` → v1.0（修复 #5, #6，内容更新但版本号保持）
+- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.1（修复 #3, #4）
+
+**结论**：
+- 三份文档间的术语、API 函数签名、配置引用方式已对齐
+- 2 个高严重度 Bug（会导致运行时失败的伪代码错误）已修复
+- PRD 中被 FD 设计阶段覆盖的约束已标注更新说明
+
+#### 5. TDD 测试设计文档编写
+
+**时间**：2026-04-12
+
+**问题背景**：
+- PRD/FD/TD 已完成并联调通过，需编写独立的 TDD（测试设计文档）指导实现阶段的测试编写
+- TD §8 仅提供测试策略概要（单元 11 + 集成 9 = 20 个用例），需扩展为完整的测试设计
+
+**讨论与决策**：
+
+1. 文件组织方式
+   - 方案 A: 两个文件（与 TD §8 原设计一致）
+   - **方案 B: 一个文件**（✅ 采纳）— `tests/test_oauth_tool.py`，多 TestCase 分组
+   - 方案 C: 三个文件（最细粒度）
+
+2. 测试基础设施分析
+   - 分析了 7 个现有测试文件的 fixture/mock/断言/命名模式
+   - 分析了 errors.py、auth.py、graph.py、accounts.py 的完整函数签名
+   - 确认项目使用 `unittest.TestCase` + `_import_app.py` 模式
+
+**产出变更**：
+- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md` → v1.0（新建）
+  - 11 个章节：文档目标、测试目标、测试原则、测试分层设计（13 个 TestCase 分组）、Mock 策略、测试数据、测试难点、前端手动验收、用例总表、执行命令、与 TD 差异说明
+  - 自动化 47 个用例 + 手动验收 8 个场景 = 55 个测试点
+  - 每个用例含用例 ID、场景描述、关键断言、伪代码
+- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.2（更新 §8 测试策略）
+  - 测试文件名由两个合并为一个（`test_oauth_tool.py`）
+  - §8 增加 TDD 交叉引用
+  - 头部新增关联 TDD 字段
+
+**结论**：
+- TDD 覆盖了 TD §8 的全部用例并扩展至 47 个自动化用例（原 20 个），增加了 PKCE 字符集、Scope 更多边界、FLOW_STORE 更细粒度、认证拦截、敏感数据过滤等边界场景
+- 识别了 4 个测试难点并提供应对方案：FLOW_STORE 模块级变量隔离、Blueprint 条件注册时机、update_account 必填参数、requests.post Mock 路径
+
+---
+
+#### 6. TODO 任务拆分文档编写
+
+**时间**：2026-04-12
+
+**问题背景**：
+- PRD/FD/TD/TDD 四份文档均已完成并联调通过
+- 需编写 TODO 任务拆分文档，将 TD §9 的 4 个里程碑细化为可执行的开发任务
+
+**讨论与决策**：
+
+1. 分阶段结构（8 个 Phase）
+   - Phase 0: 文档对齐收尾（修复 TDD URL 路径不一致问题）
+   - Phase 1~2: 后端基础层 + Service 核心
+   - Phase 3: Service 层 TDD 测试（先行）
+   - Phase 4~5: 路由层 + API 集成测试
+   - Phase 6: 前端实现
+   - Phase 7: 联调与发布
+
+2. TDD URL 路径修正
+   - 发现 TDD 中所有 API 路径使用了 `/token-tool/api/*` 格式
+   - TD 定义的路由为 `/api/token-tool/*` 格式
+   - 已在编写 TODO 前统一修正 TDD 中约 20 处 URL 路径
+
+**产出变更**：
+- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.0（新建）
+
+#### 7. OAuth Token 获取工具实现落地（v1.15.0）
+
+**时间**：2026-04-12
+
+**本次实现内容**：
+
+1. 后端基础层
+   - `outlook_web/config.py` 新增 6 个 OAuth Token 工具环境变量 getter
+   - `outlook_web/repositories/settings.py` 新增 6 个 `oauth_tool_*` typed getter
+
+2. OAuth Service 核心
+   - 新增 `outlook_web/services/oauth_tool.py`
+   - 完成 PKCE、Scope 校验、OAUTH_FLOW_STORE、错误引导、JWT payload 解码、authorization_code 换 token
+   - 修正 Microsoft 错误解析：同时保留 `error` 与 `error_description`，保证引导映射稳定
+
+3. 路由与控制器
+   - 新增 `outlook_web/routes/token_tool.py` 与 `outlook_web/controllers/token_tool.py`
+   - `app.py` 条件注册 Blueprint，并注入 `OAUTH_TOOL_ENABLED`
+   - 按实现阶段确认结果，Controller 层统一增加动态开关检查，满足工具关闭时页面/API 一并返回 404
+
+4. 测试
+   - 新增 `tests/test_oauth_tool.py`
+   - 覆盖 Service 29 个用例 + API 33 个用例，共 62 个自动化用例
+
+5. 前端与发布信息
+   - 新增独立页面 `token_tool.html`、回调页 `popup_result.html`
+   - 新增 `static/js/features/token_tool.js`、`static/css/token_tool.css`
+   - `templates/index.html` 侧边栏增加 Token 工具入口
+   - 更新 `CHANGELOG.md`、`README.md`、`README.en.md`、`.env.example`、`docker-compose.yml`
+   - 版本号提升到 `v1.15.0`
+  - 8 个 Phase、43 个 Task
+  - 每个 Task 含文件路径、位置、检查项
+  - 包含依赖关系图、风险提醒表
+  - 映射 TD §4/§5 完整伪代码和 TDD 55 个测试点
+- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md`（修正）
+  - 约 20 处 API URL 路径从 `/token-tool/api/*` 修正为 `/api/token-tool/*`，与 TD §4.4 路由定义保持一致
+
+**结论**：
+- 所有开发文档（PRD/FD/TD/TDD/TODO）编写完成，形成完整的文档链路
+- Issue #38 功能从需求分析到任务拆分的文档阶段全部完成
+- 后续进入实现阶段时，按 TODO Phase 0~7 顺序执行
+
+#### 7. 第二次文档联调（TODO 交叉审查）
+
+**时间**：2026-04-12
+
+**问题背景**：
+- TODO v1.0 完成后，需要与 PRD/FD/TD/TDD 全部文档进行交叉一致性校验
+- 确保 TODO 中所有函数名、返回类型、字段名、测试数量与权威文档（TD）完全一致
+
+**审查发现（8 个不一致）**：
+
+| 级别 | 编号 | 问题 | 影响文件 |
+|------|------|------|---------|
+| HIGH | H1 | TODO Phase 2 使用 6 个错误的 Service 函数名（如 `store_flow()` → `store_oauth_flow()`） | TODO |
+| HIGH | H2 | `validate_scope()` 返回类型 `Optional[str]` → `Tuple[str, Optional[str]]` | TODO |
+| HIGH | H3 | TDD §9 用例总数 24+23=47 → 实际 29+28=57（预存 bug） | TDD, TODO |
+| MED | M4 | `get_account_list()` 返回字段 `email_addr, client_id` → `email, account_type` | TODO, TDD |
+| MED | M5 | 删除不存在的 `save_oauth_tool_config()` 函数 | TODO |
+| MED | M6 | 补充缺失的 `get_oauth_tool_prompt_consent()` getter | TODO |
+| LOW | L7 | getter 命名 `get_oauth_tool_tenant_id()` → `get_oauth_tool_tenant()` | TODO |
+| LOW | L8 | `render_page()` 动态开关检查描述修正（与 Task 4.6 统一） | TODO |
+
+**产出变更**：
+- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.1
+  - 修复全部 8 个不一致问题
+  - 更新版本头部引用 TDD v1.1
+- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md` → v1.1
+  - §9 用例总数修正：24→29, 23→28, 47→57, 55→65
+  - A-LIST-01 返回字段修正：`email_addr, client_id` → `email, account_type`
+  - A-LIST-01 伪代码断言对齐 TD §4.5
+
+**结论**：
+- 五份文档（PRD/FD/TD/TDD/TODO）全部完成交叉一致性校验
+- 所有函数名、返回类型、字段名与 TD（权威源）完全对齐
+- 文档链路完整，可进入实现阶段
+
+#### 8. 实现提示词编写 + 文档最终同步
+
+**时间**：2026-04-12
+
+**问题背景**：
+- 用户需要一份自包含的实现提示词，供其他 AI 按文档严格执行开发
+- 第二次联调修正后 TD §8 的测试计数仍沿用旧值，需同步
+
+**操作内容**：
+
+1. TD §8 测试计数同步
+   - §8.1 标题 24 → 29、§8.2 标题 23 → 28、总计 47+8=55 → 57+8=65
+   - TD 版本升级 v1.2 → v1.3
+   - TODO 引用更新为 TD v1.3
+
+2. 编写实现提示词（直接输出，不落地为文件）
+   - 涵盖项目上下文、5 份文档精华、逐 Phase 实现指令
+   - 包含关键陷阱警告和验收标准
+
+**产出变更**：
+- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.3（§8 计数同步）
+- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.1（引用更新 TD v1.3）
+
+**文档最终版本**：
+
+| 文档 | 版本 | 状态 |
+|------|------|------|
+| PRD | v1.3 | ✅ 完成 |
+| FD | v1.0 | ✅ 完成 |
+| TD | v1.3 | ✅ 完成 |
+| TDD | v1.1 | ✅ 完成 |
+| TODO | v1.1 | ✅ 完成 |
+
+---
+
+## 2026-04-09
+
+### 操作记录
 
 #### 6. Issue #32 修复落地（全选跨分页 + 删除 500）
 

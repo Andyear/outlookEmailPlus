@@ -6,9 +6,9 @@
 """
 
 if __name__ != "__main__":
-    import unittest
+    import pytest
 
-    raise unittest.SkipTest("manual live diagnostic script")
+    pytest.skip("manual live diagnostic script", allow_module_level=True)
 
 import json
 import sys
@@ -223,7 +223,7 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv()
-    from outlook_web.security.crypto import decrypt_data, encrypt_data
+    from outlook_web.security.crypto import encrypt_data, decrypt_data
 
     enc_rt = encrypt_data(refresh_token)
     print(f"  加密后长度: {len(enc_rt)}")

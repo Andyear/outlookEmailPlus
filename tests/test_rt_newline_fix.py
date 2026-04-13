@@ -1,7 +1,6 @@
 """
 测试：导入含换行的 refresh_token 不再被截断
 """
-
 import unittest
 from unittest.mock import patch
 
@@ -71,7 +70,11 @@ class TestRefreshTokenNewlineMerge(unittest.TestCase):
 
     def test_comment_lines_not_merged(self):
         """注释行不应被合并到上一行"""
-        account_str = "# This is a comment\n" "user@hotmail.com----pw----cid----rt-value\n" "# Another comment"
+        account_str = (
+            "# This is a comment\n"
+            "user@hotmail.com----pw----cid----rt-value\n"
+            "# Another comment"
+        )
         lines = self._merge_lines(account_str)
         # 合并后: 3 行（2 个注释 + 1 个账号），注释行不会被合并
         self.assertEqual(len(lines), 3)
