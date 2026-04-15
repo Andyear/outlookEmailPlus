@@ -177,6 +177,30 @@
 5. 现场状态
    - 本次仅进行镜像状态核对与文档记录，不涉及业务代码变更。
 
+#### 73. 重打 v1.17.0 标签以补齐版本镜像（执行中）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 决策与目标
+   - 按会话选择，将 `v1.17.0` 重打到已验证全绿提交 `f3d2208`，以补齐 GHCR/DockerHub 的 `v1.17.0` 镜像标签。
+
+2. 执行动作
+   - `git tag -fa v1.17.0 f3d2208 -m "v1.17.0 (retag for CI-green image publish)"`
+   - `git push origin :refs/tags/v1.17.0`
+   - `git push origin v1.17.0`
+
+3. 触发结果（当前）
+   - `Create GitHub Release`（run `24451870230`）✅ success
+   - `Build and Push Docker Image`（run `24451870226`）⏳ queued/in_progress
+
+4. 文档同步
+   - 已更新 FD/TD/TDD/TODO/联调检查文档，回填重打标签与当前工作流进展。
+
+5. 现场状态
+   - 当前工作区干净，等待 Docker tag workflow 最终完成后再核对双仓 `v1.17.0` 标签。
+
 #### 66. v1.17.0 发布执行（单提交策略）与 CI/CD 实时结果回填
 
 **时间**：2026-04-15

@@ -1,8 +1,8 @@
 # TDD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.8
+- 文档版本: v1.9
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.8 — 回填双仓镜像标签可用性核对）
+- 更新日期: 2026-04-15（v1.9 — 回填重打标签补镜像流水线进展）
 - 文档类型: 测试设计文档（TDD）
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
@@ -387,3 +387,11 @@ python -m unittest discover -s tests -v
   - `latest`：两仓均存在，digest 一致（`sha256:8aef74...9218`）；
   - `v1.17.0`：两仓均 `not found`。
 - 结论：双仓主线镜像同步正常，版本标签镜像仍待补齐。
+
+### 13.13 重打 v1.17.0 标签补镜像进展（2026-04-15）
+
+- 标签调整：`v1.17.0` 已重打到 `f3d2208`（CI 全绿提交）。
+- 工作流状态：
+  - `Create GitHub Release`（run `24451870230`）✅ success；
+  - `Build and Push Docker Image`（run `24451870226`）⏳ queued/in_progress。
+- 备注：待 Docker workflow 完成后再进行 GHCR/DockerHub 的 `v1.17.0` 标签存在性复核。

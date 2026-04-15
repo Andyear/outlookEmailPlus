@@ -1,8 +1,8 @@
 # TD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.9
+- 文档版本: v1.10
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.9 — 回填双仓镜像 digest 核对）
+- 更新日期: 2026-04-15（v1.10 — 回填 v1.17.0 重打标签补镜像执行）
 - 文档类型: 技术细节设计
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
@@ -595,3 +595,14 @@ const key = Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('');
 3. `v1.17.0` 标签：
    - 两仓查询结果均 `not found`；
    - 与历史状态一致：tag 流水线初次失败导致版本标签镜像未生成。
+
+### 10.9 v1.17.0 重打标签补镜像（2026-04-15）
+
+1. 执行原因：
+   - 先前 `v1.17.0` 标签镜像未生成（tag workflow 初次失败）。
+2. 执行动作：
+   - `v1.17.0` tag 重打至 `f3d2208`（四项主工作流全绿提交）；
+   - 删除远端旧 tag 并推送新 tag。
+3. 触发结果：
+   - `Create GitHub Release`（run `24451870230`）已 success；
+   - `Build and Push Docker Image`（run `24451870226`）已触发，当前处于 queued/in_progress（待完成后复核双仓 `v1.17.0`）。

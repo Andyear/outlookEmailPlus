@@ -1,8 +1,8 @@
 # FD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.9
+- 文档版本: v1.10
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.9 — 回填双仓镜像构建状态核对）
+- 更新日期: 2026-04-15（v1.10 — 回填 v1.17.0 重打标签补镜像进展）
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
 - 关联 TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
@@ -303,6 +303,17 @@
 - `latest` 标签：两仓均存在，且 digest 一致：
   - `sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
 - `v1.17.0` 标签：两仓当前均不存在（tag 推送当时 workflow 失败导致未产出版本标签镜像）。
+
+会话进展回填（2026-04-15，v1.17.0 重打标签补镜像）：
+
+- 已按会话确认将 `v1.17.0` 从旧目标提交重打到已验证全绿提交 `f3d2208`。
+- 执行动作：
+  - 本地重打 tag：`git tag -fa v1.17.0 f3d2208 -m "v1.17.0 (retag for CI-green image publish)"`
+  - 删除远端旧 tag：`git push origin :refs/tags/v1.17.0`
+  - 推送新 tag：`git push origin v1.17.0`
+- 触发结果：
+  - `Create GitHub Release`（tag）已 success；
+  - `Build and Push Docker Image`（tag）已触发，当前处于排队/执行中（待最终完成后再核对双仓 `v1.17.0` 标签）。
 
 ---
 

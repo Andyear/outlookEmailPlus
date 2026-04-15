@@ -3,9 +3,9 @@
 > 检查日期：2026-04-14  
 > 对照文档：
 > - PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（v1.5，路径待补）
-> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.9）
-> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.9）
-> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.8）
+> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.10）
+> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.10）
+> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.9）
 
 ---
 
@@ -151,6 +151,14 @@
 - GHCR 与 DockerHub 的 `main`/`latest` 均存在，且 digest 一致：
   - `sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
 - `v1.17.0` 标签在两仓均 `not found`，确认版本标签镜像尚未补齐。
+
+### 4.12 v1.17.0 重打标签补镜像进展（2026-04-15）
+
+- `v1.17.0` 已重打至全绿提交 `f3d2208`，并已重新推送 tag。
+- 当前工作流状态：
+  - `Create GitHub Release`（run `24451870230`）已 success；
+  - `Build and Push Docker Image`（run `24451870226`）进行中（queued/in_progress）。
+- 待该 workflow 完成后，再回填双仓 `v1.17.0` 镜像标签核对结论。
 
 ---
 
