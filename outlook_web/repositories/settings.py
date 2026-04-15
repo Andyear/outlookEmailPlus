@@ -104,7 +104,9 @@ def validate_temp_mail_provider_name(value: str | None) -> str:
 
 
 def get_temp_mail_provider() -> str:
-    return normalize_temp_mail_provider_name(get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER))
+    return normalize_temp_mail_provider_name(
+        get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER)
+    )
 
 
 def get_temp_mail_runtime_provider_name(provider_name: str | None = None) -> str:
@@ -207,6 +209,44 @@ def get_external_api_key() -> str:
         return ""
 
 
+def get_webhook_notification_enabled() -> bool:
+    return get_setting("webhook_notification_enabled", "false").lower() == "true"
+
+
+def get_webhook_notification_url() -> str:
+    return get_setting("webhook_notification_url", "").strip()
+
+
+def get_webhook_notification_token() -> str:
+    """
+    获取 Webhook Token。
+
+    - 若数据库为空，返回空字符串
+    - 若为 enc: 加密格式，自动解密
+    - 解密失败时返回空字符串
+    """
+    value = get_setting("webhook_notification_token", "").strip()
+    if not value:
+        return ""
+    try:
+        return decrypt_data(value)
+    except Exception:
+        return ""
+
+
+def get_webhook_notification_token_masked(head: int = 4, tail: int = 4) -> str:
+    """Webhook Token 脱敏展示：前 N 位 + 若干 * + 后 N 位。"""
+    token = get_webhook_notification_token()
+    if not token:
+        return ""
+    safe_value = str(token)
+    if len(safe_value) <= head + tail:
+        return "*" * len(safe_value)
+    return (
+        safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    )
+
+
 def get_verification_ai_enabled() -> bool:
     return get_setting("verification_ai_enabled", "false").lower() == "true"
 
@@ -245,7 +285,9 @@ def get_external_api_key_masked(head: int = 4, tail: int = 4) -> str:
     safe_value = str(key)
     if len(safe_value) <= head + tail:
         return "*" * len(safe_value)
-    return safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    return (
+        safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    )
 
 
 # ── P1：公网模式安全配置 ──────────────────────────────
@@ -292,15 +334,23 @@ def get_pool_external_enabled() -> bool:
 
 
 def get_external_api_disable_pool_claim_random() -> bool:
-    return get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_release() -> bool:
-    return get_setting("external_api_disable_pool_claim_release", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_release", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_complete() -> bool:
-    return get_setting("external_api_disable_pool_claim_complete", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_complete", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_stats() -> bool:

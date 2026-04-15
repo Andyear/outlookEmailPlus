@@ -2,6 +2,42 @@
 
 All notable changes to OutlookMail Plus are documented in this file.
 
+## [Unreleased]
+
+### 新功能 / New Features
+
+- **通用 Webhook 通知通道**：在现有通知分发体系中新增 `webhook` 通道，支持全局单 URL 配置，与 Email/Telegram 并存；发送协议为 `POST text/plain; charset=utf-8`。
+- **Webhook 测试链路**：新增 `/api/settings/webhook-test`，按“先保存，再测试”口径，仅使用已保存配置进行测试发送。
+- **External API Key 易用性增强**：设置页新增“随机生成 + 复制”交互，随机值为前端 `crypto.getRandomValues` 生成的 64 位 URL-safe 字符串。
+
+### 重要变更 / Important Changes
+
+- Webhook Token 作为可选头处理：仅在 token 非空时发送 `X-Webhook-Token`。
+- Webhook 投递策略固定：10 秒超时、失败立即重试 1 次、2xx 视为成功。
+- 本次能力扩展未引入新第三方依赖，未进行数据库 schema 变更。
+
+### 测试/验证 / Testing & Verification
+
+- 定向测试：
+  - `python -m unittest tests.test_settings_webhook -v` → 9 passed
+  - `python -m unittest tests.test_webhook_push -v` → 7 passed
+  - `python -m unittest tests.test_notification_dispatch -v` → 25 passed
+  - `python -m unittest tests.test_settings_webhook_frontend_contract -v` → 4 passed
+  - `python -m unittest tests.test_v190_frontend_contract -v` → 18 passed
+  - `python -m unittest tests.test_settings_tab_refactor_backend -v` → 14 passed
+  - `python -m unittest tests.test_settings_tab_refactor_frontend -v` → 12 passed
+- 分批回归（单命令超时约束下）：
+  - `test_[a-f]*` → Ran 346, OK
+  - `test_[g-l]*` → Ran 89, OK
+  - `test_[m-r]*` → Ran 231, OK (skipped=7)
+  - `test_[s-z]*` → Ran 492, OK
+  - 汇总：**1158 tests 通过，skipped=7**。
+
+### 已知风险 / Known Risks
+
+- Webhook 当前固定发送纯文本（`text/plain`）；若下游仅接受 JSON，需要由接入方在网关/中间层做文本转 JSON 适配。
+- UI 人工冒烟（Webhook 卡片实操、API Key 随机/复制体验）仍建议在发布前补齐。
+
 ## [v1.16.0] - 2026-04-13
 
 ### 新功能 / New Features

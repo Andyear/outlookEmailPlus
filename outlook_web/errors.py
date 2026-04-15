@@ -47,6 +47,11 @@ ERROR_MESSAGE_EN_MAP = {
     "HTTP_ERROR": "Request failed",
     "INTERNAL_ERROR": "Internal server error",
     "LEGACY_ERROR": "Request failed",
+    "WEBHOOK_URL_REQUIRED": "Webhook URL is required when webhook notification is enabled",
+    "WEBHOOK_URL_INVALID": "Webhook URL must start with http:// or https://",
+    "WEBHOOK_NOT_CONFIGURED": "Webhook notification is not configured",
+    "WEBHOOK_TEST_SEND_FAILED": "Failed to send webhook test message",
+    "WEBHOOK_SEND_FAILED": "Failed to send webhook message",
     "LOGIN_FAILED": "Login failed",
     "LOGIN_INVALID_PASSWORD": "Invalid password",
     "LOGIN_RATE_LIMITED": "Too many failed login attempts. Please try again later.",
@@ -98,6 +103,11 @@ ERROR_MESSAGE_MAP = {
     "GROUP_AI_MODEL_REQUIRED": "请填写模型 ID",
     "VERIFICATION_AI_CONFIG_INCOMPLETE": "验证码 AI 配置不完整",
     "INVALID_PARAM": "参数错误",
+    "WEBHOOK_URL_REQUIRED": "启用 Webhook 通知时必须填写 Webhook URL",
+    "WEBHOOK_URL_INVALID": "Webhook URL 必须以 http:// 或 https:// 开头",
+    "WEBHOOK_NOT_CONFIGURED": "请先完成 Webhook 配置并保存",
+    "WEBHOOK_TEST_SEND_FAILED": "Webhook 测试发送失败",
+    "WEBHOOK_SEND_FAILED": "Webhook 发送失败",
     "LOGIN_INVALID_PASSWORD": "密码错误",
     "LOGIN_RATE_LIMITED": "登录失败次数过多，请稍后再试",
     "OAUTH_CODE_INVALID": "授权码无效或已过期",
@@ -244,7 +254,11 @@ def build_error_payload(
     # - 5xx: ERROR（服务端错误）
     # - 4xx: WARNING（客户端错误，如验证失败、权限不足等，属于正常业务流程）
     # - 其他: INFO
-    log_level = logging.ERROR if status >= 500 else (logging.WARNING if status >= 400 else logging.INFO)
+    log_level = (
+        logging.ERROR
+        if status >= 500
+        else (logging.WARNING if status >= 400 else logging.INFO)
+    )
 
     try:
         current_app.logger.log(

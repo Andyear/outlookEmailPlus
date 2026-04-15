@@ -57,13 +57,17 @@ class V190FrontendContractTests(unittest.TestCase):
     def test_main_js_does_not_override_i18n_runtime_helpers(self):
         client = self.app.test_client()
         main_js = self._get_text(client, "/static/js/main.js")
-        self.assertIn("const pickApiMessage = (payload, fallbackZh, fallbackEn) =>", main_js)
+        self.assertIn(
+            "const pickApiMessage = (payload, fallbackZh, fallbackEn) =>", main_js
+        )
         self.assertIn("const formatUiDateTime = (dateStr, options = {}) =>", main_js)
         self.assertIn(
             "const formatUiRelativeTime = (dateStr, fallbackZh = '从未刷新', fallbackEn = 'Never refreshed') =>",
             main_js,
         )
-        self.assertNotIn("function pickApiMessage(payload, fallbackZh, fallbackEn)", main_js)
+        self.assertNotIn(
+            "function pickApiMessage(payload, fallbackZh, fallbackEn)", main_js
+        )
         self.assertNotIn("function formatUiDateTime(dateStr, options = {})", main_js)
         self.assertNotIn(
             "function formatUiRelativeTime(dateStr, fallbackZh = '从未刷新', fallbackEn = 'Never refreshed')",
@@ -87,6 +91,10 @@ class V190FrontendContractTests(unittest.TestCase):
         self.assertIn("/static/js/i18n.js", index_html)
         self.assertIn("/static/js/i18n.js", login_html)
         self.assertIn('id="telegramPollInterval" min="10" max="86400"', index_html)
+        self.assertIn('id="webhookNotificationEnabled"', index_html)
+        self.assertIn('id="webhookNotificationUrl"', index_html)
+        self.assertIn('id="webhookNotificationToken"', index_html)
+        self.assertIn('id="btnTestWebhookNotification"', index_html)
 
     def test_key_email_notification_translations_exist(self):
         client = self.app.test_client()
@@ -162,6 +170,15 @@ class V190FrontendContractTests(unittest.TestCase):
             "勾选后，新导入的 Outlook/IMAP 账号会以 `available` 状态进入邮箱池；不勾选则保持池外。",
             "（每个邮箱刷新之间的等待时间）",
             "访问 GitHub 仓库",
+            "Webhook 通知",
+            "启用 Webhook 通知",
+            "Webhook URL",
+            "Webhook Token（可选）",
+            "测试 Webhook",
+            "Webhook 测试成功",
+            "Webhook 测试失败",
+            "随机生成",
+            "当前已存在 API Key，是否覆盖？",
         ]:
             self.assertIn(text, js)
 
@@ -206,7 +223,9 @@ class V190FrontendContractTests(unittest.TestCase):
             "这里只配置 Email 通知通道。普通邮箱需在账号列表开启通知后才会通过 Email 发送；临时邮箱按当前通知规则处理。启用后仅从新到达的邮件开始通知。",
             index_html,
         )
-        self.assertIn("这里只配置 Email 渠道的接收邮箱，不会让所有普通邮箱自动发送。", index_html)
+        self.assertIn(
+            "这里只配置 Email 渠道的接收邮箱，不会让所有普通邮箱自动发送。", index_html
+        )
         self.assertIn(
             "这里只配置 Telegram 通知通道。普通邮箱需在账号列表开启通知后才会通过 Telegram 发送；临时邮箱按当前通知规则处理。",
             index_html,
@@ -245,7 +264,9 @@ class V190FrontendContractTests(unittest.TestCase):
 
         self.assertIn("function parseIntegerSetting(value, fallback)", main_js)
         self.assertIn("let autoPollingEnabled = false;", main_js)
-        self.assertIn("function applyPollingSettings(settings, { restart = false", main_js)
+        self.assertIn(
+            "function applyPollingSettings(settings, { restart = false", main_js
+        )
         # [Phase 3 兼容] 使用两个字段的或运算
         self.assertIn(
             "autoPollingEnabled = isAutoPollingEnabledSetting(settings.enable_auto_polling)",
@@ -255,8 +276,12 @@ class V190FrontendContractTests(unittest.TestCase):
             "|| isAutoPollingEnabledSetting(settings.enable_compact_auto_poll);",
             main_js,
         )
-        self.assertIn("String(parseIntegerSetting(data.settings.polling_count, 5))", main_js)
-        self.assertIn("maxPollingCount = parseIntegerSetting(settings.polling_count, 5);", main_js)
+        self.assertIn(
+            "String(parseIntegerSetting(data.settings.polling_count, 5))", main_js
+        )
+        self.assertIn(
+            "maxPollingCount = parseIntegerSetting(settings.polling_count, 5);", main_js
+        )
         self.assertIn("applyPollingSettings(settings, { restart: true });", main_js)
         self.assertNotIn("data.settings.polling_count || '5'", main_js)
         self.assertNotIn("parseInt(data.settings.polling_count) || 5", main_js)
@@ -314,7 +339,9 @@ class V190FrontendContractTests(unittest.TestCase):
             main_js,
         )
         self.assertIn("data.settings.pool_external_enabled === true", main_js)
-        self.assertIn("settings.pool_external_enabled = poolExternalEnabledEl.checked", main_js)
+        self.assertIn(
+            "settings.pool_external_enabled = poolExternalEnabledEl.checked", main_js
+        )
         self.assertIn(
             "settings.external_api_disable_pool_claim_random = disablePoolClaimRandomEl.checked",
             main_js,
@@ -338,11 +365,19 @@ class V190FrontendContractTests(unittest.TestCase):
         self.assertIn('id="externalApiDisablePoolStats"', index_html)
         self.assertIn("启用 external pool 端点", index_html)
         self.assertIn("仅设置对外 API Key 不会自动开启邮箱池对外接口", index_html)
+        self.assertIn("function generateExternalApiKey()", main_js)
+        self.assertIn("function copyExternalApiKey()", main_js)
+        self.assertIn("window.crypto.getRandomValues", main_js)
+        self.assertIn("const bytes = new Uint8Array(64)", main_js)
+        self.assertIn("async function testWebhookNotification()", main_js)
+        self.assertIn("/api/settings/webhook-test", main_js)
 
     def test_account_edit_uses_conditional_outlook_credential_validation(self):
         client = self.app.test_client()
         accounts_js = self._get_text(client, "/static/js/features/accounts.js")
-        self.assertIn("clientIdInput.dataset.originalValue = acc.client_id || '';", accounts_js)
+        self.assertIn(
+            "clientIdInput.dataset.originalValue = acc.client_id || '';", accounts_js
+        )
         self.assertIn(
             "const wantsToUpdateOutlookCredentials = !isImap && (hasClientIdChanged || !!refreshToken);",
             accounts_js,
@@ -351,7 +386,9 @@ class V190FrontendContractTests(unittest.TestCase):
             "if (wantsToUpdateOutlookCredentials && (!data.client_id || !data.refresh_token))",
             accounts_js,
         )
-        self.assertNotIn("if (!isImap && (!data.client_id || !data.refresh_token))", accounts_js)
+        self.assertNotIn(
+            "if (!isImap && (!data.client_id || !data.refresh_token))", accounts_js
+        )
 
     def test_collapsed_sidebar_hides_github_label_to_avoid_overlap(self):
         client = self.app.test_client()
@@ -359,7 +396,9 @@ class V190FrontendContractTests(unittest.TestCase):
         i18n_js = self._get_text(client, "/static/js/i18n.js")
         self.assertIn(".sidebar-collapsed .btn-github span { display: none; }", css)
         self.assertIn(".sidebar-collapsed .btn-github {", css)
-        self.assertIn(".sidebar-collapsed #globalLanguageSwitcher.switcher-docked", i18n_js)
+        self.assertIn(
+            ".sidebar-collapsed #globalLanguageSwitcher.switcher-docked", i18n_js
+        )
 
     def test_scroll_is_not_globally_locked_on_html_body(self):
         client = self.app.test_client()
@@ -381,7 +420,10 @@ class V190FrontendContractTests(unittest.TestCase):
         main_js = self._get_text(client, "/static/js/main.js")
 
         # i18n.js 中应包含新增的翻译条目
-        self.assertIn("'Watchtower 检查完毕，当前已是最新版本': 'Watchtower check complete, already up to date'", i18n_js)
+        self.assertIn(
+            "'Watchtower 检查完毕，当前已是最新版本': 'Watchtower check complete, already up to date'",
+            i18n_js,
+        )
         self.assertIn("'✅ 连通正常': '✅ Connection OK'", i18n_js)
         self.assertIn("'⏳ 测试中…': '⏳ Testing...'", i18n_js)
         self.assertIn("'基础': 'Basic'", i18n_js)

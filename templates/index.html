@@ -593,7 +593,11 @@
                             <div class="card-body" style="padding: 1.5rem;">
                                 <div class="form-group">
                                     <label class="form-label">对外开放 API Key</label>
-                                    <input type="password" class="form-input" id="settingsExternalApiKey" placeholder="用于 /api/external/* 的 X-API-Key" autocomplete="off">
+                                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                        <input type="password" class="form-input" id="settingsExternalApiKey" placeholder="用于 /api/external/* 的 X-API-Key" autocomplete="off" style="flex:1;min-width:260px;">
+                                        <button type="button" class="btn btn-outline" id="btnGenerateExternalApiKey" onclick="generateExternalApiKey()" style="font-size:0.85rem;">随机生成</button>
+                                        <button type="button" class="btn btn-outline" id="btnCopyExternalApiKey" onclick="copyExternalApiKey()" style="font-size:0.85rem;">复制</button>
+                                    </div>
                                     <div class="form-hint" id="externalApiKeyHint">
                                         用于对外开放接口鉴权（请求头：X-API-Key）。如需禁用对外开放接口，可清空后保存。
                                     </div>
@@ -858,8 +862,38 @@
                             </div>
                         </div>
 
+                        <!-- Webhook 通知设置 -->
+                        <div class="card" style="margin-top: 1rem;">
+                            <div class="card-header">
+                                <div class="card-title">📡 Webhook 通知</div>
+                            </div>
+                            <div class="card-body" style="padding: 1.5rem;">
+                                <div class="form-group">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" id="webhookNotificationEnabled">
+                                        <span class="form-label" style="margin: 0;">启用 Webhook 通知</span>
+                                    </label>
+                                    <div class="form-hint">全局单 URL 通道；普通邮箱和临时邮箱都遵循当前通知参与规则。</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Webhook URL</label>
+                                    <input type="text" class="form-input" id="webhookNotificationUrl" placeholder="https://example.com/webhook">
+                                    <div class="form-hint">仅支持 http:// 或 https://，发送格式为 text/plain。</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Webhook Token（可选）</label>
+                                    <input type="password" class="form-input" id="webhookNotificationToken" placeholder="输入可选 Token" autocomplete="off">
+                                    <div class="form-hint">仅当有值时会附带请求头 X-Webhook-Token。</div>
+                                </div>
+                                <div class="form-group" style="margin-top: 0.5rem;">
+                                    <button class="btn btn-outline" onclick="testWebhookNotification()" id="btnTestWebhookNotification" style="font-size: 0.85rem;">测试 Webhook</button>
+                                    <div class="form-hint">按“先保存，再测试”处理；测试仅使用已保存配置。</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Watchtower 一键更新设置 -->
-                        <div class="card">
+                        <div class="card" style="margin-top: 1rem;">
                             <div class="card-header">
                                 <div class="card-title">🔄 一键更新配置</div>
                             </div>

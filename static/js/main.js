@@ -1810,12 +1810,23 @@ ${details}
                     const tgProxy = document.getElementById('telegramProxyUrl');
                     const emailEnabled = document.getElementById('emailNotificationEnabled');
                     const emailRecipient = document.getElementById('emailNotificationRecipient');
+                    const webhookEnabledEl = document.getElementById('webhookNotificationEnabled');
+                    const webhookUrlEl = document.getElementById('webhookNotificationUrl');
+                    const webhookTokenEl = document.getElementById('webhookNotificationToken');
                     if (tgToken) tgToken.value = data.telegram_bot_token || '';
                     if (tgChat) tgChat.value = data.telegram_chat_id || '';
                     if (tgPoll) tgPoll.value = String(parseIntegerSetting(data.telegram_poll_interval, 600));
                     if (tgProxy) tgProxy.value = (data.settings && data.settings.telegram_proxy_url) || '';
                     if (emailEnabled) emailEnabled.checked = !!data.settings.email_notification_enabled;
                     if (emailRecipient) emailRecipient.value = data.settings.email_notification_recipient || '';
+                    if (webhookEnabledEl) webhookEnabledEl.checked = data.settings.webhook_notification_enabled === true;
+                    if (webhookUrlEl) webhookUrlEl.value = (data.settings && data.settings.webhook_notification_url) || '';
+                    if (webhookTokenEl) {
+                        const webhookMasked = (data.settings && data.settings.webhook_notification_token) || '';
+                        webhookTokenEl.value = webhookMasked;
+                        webhookTokenEl.dataset.maskedValue = webhookMasked;
+                        webhookTokenEl.dataset.isSet = webhookMasked ? 'true' : 'false';
+                    }
 
                     // 加载 Watchtower 一键更新设置
                     const wtUrl = document.getElementById('watchtowerUrl');
@@ -2335,6 +2346,30 @@ ${details}
             }
             settings.telegram_proxy_url = tgProxyUrl;
 
+            // Webhook 通知配置
+            const webhookEnabledEl = document.getElementById('webhookNotificationEnabled');
+            const webhookUrlEl = document.getElementById('webhookNotificationUrl');
+            const webhookTokenEl = document.getElementById('webhookNotificationToken');
+            const webhookEnabled = webhookEnabledEl ? webhookEnabledEl.checked : false;
+            const webhookUrl = webhookUrlEl ? webhookUrlEl.value.trim() : '';
+            const webhookToken = webhookTokenEl ? webhookTokenEl.value.trim() : '';
+            const webhookTokenMasked = webhookTokenEl ? (webhookTokenEl.dataset.maskedValue || '') : '';
+            const webhookTokenIsSet = webhookTokenEl ? webhookTokenEl.dataset.isSet === 'true' : false;
+
+            if (webhookEnabled && !webhookUrl) {
+                showToast(translateAppTextLocal('启用 Webhook 通知时必须填写 Webhook URL'), 'error');
+                return;
+            }
+            if (webhookUrl && !(webhookUrl.startsWith('http://') || webhookUrl.startsWith('https://'))) {
+                showToast(translateAppTextLocal('Webhook URL 必须以 http:// 或 https:// 开头'), 'error');
+                return;
+            }
+            settings.webhook_notification_enabled = webhookEnabled;
+            settings.webhook_notification_url = webhookUrl;
+            if (!(webhookTokenIsSet && webhookToken && webhookToken === webhookTokenMasked)) {
+                settings.webhook_notification_token = webhookToken;
+            }
+
             // Watchtower 一键更新配置
             const wtUrlEl = document.getElementById('watchtowerUrl');
             const wtTokenEl = document.getElementById('watchtowerToken');
@@ -2466,6 +2501,74 @@ ${details}
                 showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('📨 发送测试邮件'); }
+            }
+        }
+
+        async function testWebhookNotification() {
+            const btn = document.getElementById('btnTestWebhookNotification');
+            if (btn) { btn.disabled = true; btn.textContent = translateAppTextLocal('⏳ 发送中…'); }
+            try {
+                const resp = await fetch('/api/settings/webhook-test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast(pickApiMessage(data, 'Webhook 测试成功', 'Webhook test succeeded'), 'success');
+                } else {
+                    handleApiError(data, 'Webhook 测试失败');
+                }
+            } catch (e) {
+                showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('测试 Webhook'); }
+            }
+        }
+
+        function generateExternalApiKey() {
+            const input = document.getElementById('settingsExternalApiKey');
+            if (!input) return;
+
+            const currentValue = input.value.trim();
+            if (currentValue) {
+                const confirmed = confirm(translateAppTextLocal('当前已存在 API Key，是否覆盖？'));
+                if (!confirmed) return;
+            }
+
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+            const bytes = new Uint8Array(64);
+            window.crypto.getRandomValues(bytes);
+            const key = Array.from(bytes, b => alphabet[b % alphabet.length]).join('');
+
+            input.value = key;
+            showToast(translateAppTextLocal('已生成新的 API Key（尚未保存）'), 'success');
+        }
+
+        async function copyExternalApiKey() {
+            const input = document.getElementById('settingsExternalApiKey');
+            if (!input) return;
+
+            const value = input.value || '';
+            if (!value.trim()) {
+                showToast(translateAppTextLocal('当前没有可复制的 API Key'), 'warning');
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(value);
+                } else {
+                    input.focus();
+                    input.select();
+                    const ok = document.execCommand('copy');
+                    if (!ok) {
+                        throw new Error('execCommand_copy_failed');
+                    }
+                }
+                showToast(translateAppTextLocal('内容已复制到剪贴板'), 'success');
+            } catch (error) {
+                showToast(translateAppTextLocal('复制失败，请手动复制'), 'error');
             }
         }
 
@@ -2763,6 +2866,22 @@ ${details}
 
                 const tgProxyUrlQuick = document.getElementById('telegramProxyUrl')?.value?.trim();
                 if (tgProxyUrlQuick !== undefined) settings.telegram_proxy_url = tgProxyUrlQuick;
+
+                const webhookEnabledQuick = document.getElementById('webhookNotificationEnabled')?.checked;
+                if (webhookEnabledQuick !== undefined) settings.webhook_notification_enabled = webhookEnabledQuick;
+
+                const webhookUrlQuick = document.getElementById('webhookNotificationUrl')?.value?.trim();
+                if (webhookUrlQuick !== undefined) settings.webhook_notification_url = webhookUrlQuick;
+
+                const webhookTokenEl = document.getElementById('webhookNotificationToken');
+                if (webhookTokenEl) {
+                    const val = webhookTokenEl.value.trim();
+                    const masked = webhookTokenEl.dataset.maskedValue || '';
+                    const isSet = webhookTokenEl.dataset.isSet === 'true';
+                    if (!(isSet && val && val === masked)) {
+                        settings.webhook_notification_token = val;
+                    }
+                }
             }
 
             if (Object.keys(settings).length === 0) return;

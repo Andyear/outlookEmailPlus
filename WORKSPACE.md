@@ -4,6 +4,583 @@
 
 ---
 
+## 2026-04-15
+
+### 操作记录
+
+#### 60. Docker 环境恢复后完成镜像构建与容器健康验证
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. Docker 环境检查
+   - `docker version --format "Client={{.Client.Version}} Server={{.Server.Version}}"`
+   - 返回：`Client=28.3.2 Server=28.3.2`（环境恢复可用）
+
+2. 镜像构建
+   - 命令：`docker build -t "outlook-email-plus:local-regression-20260415" .`
+   - 结果：构建成功
+   - 镜像：`outlook-email-plus:local-regression-20260415`
+   - image id：`acc8f048a48e`
+
+3. 容器运行与验证
+   - 首次运行：`-p 5055:5000` 失败（端口占用/权限）
+   - 处理：删除失败的 `Created` 容器
+   - 二次运行：`docker run -d --name oep-regression-20260415 -p 18080:5000 ...` 成功
+   - 状态：`Up ... (healthy)`
+   - 健康检查：`GET http://127.0.0.1:18080/healthz` 返回 `200`
+   - 返回体：`{"boot_id":"1776236786410-7","status":"ok","version":"1.16.0"}`
+   - 容器日志：gunicorn 启动成功，应用与定时任务加载正常
+
+4. 文档回填
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 升级至 v1.5，Docker 状态改为“已构建并健康验证”
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 升级至 v1.4，Docker 状态回填为成功
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 升级至 v1.4，10.3 改为“构建+运行验证通过”
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 升级至 v1.3，13.6 更新为“Docker 验证成功”并记录端口回退过程
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 升级至 v1.6，新增“Docker 环境恢复后”执行回填
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 新增 4.6（Docker 构建与容器验证回填）
+
+5. 现场状态
+   - 本次包含：Docker 构建 + 容器验证 + 文档回填 + WORKSPACE 记录
+   - 未新增业务代码实现改动
+   - 本地 Python 后台服务仍保持运行（PID `37460`）
+   - Docker 回归容器正在运行：`oep-regression-20260415`
+
+#### 61. Docker 运行态复核与文档二次回填
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 运行态复核
+   - `docker ps`：`oep-regression-20260415` 状态 `Up ... (healthy)`
+   - `docker inspect`：`Health=healthy`
+   - `docker images`：`outlook-email-plus:local-regression-20260415` 存在（image id `acc8f048a48e`）
+
+2. 文档二次回填（按实际状态修正）
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 6.5 增补 Docker 端口回退细节（5055 失败→18080 成功）
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 10.3 补充端口失败处理与回退路径
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 新增 13.7（Docker 运行态核对）
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 新增“Docker 运行态复核”执行回填
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 4.6 增补端口异常处理结论
+
+3. 现场状态
+   - 本次仅做运行态核对与文档修正
+   - 未新增业务代码改动
+   - 未新增服务启停动作（沿用现有后台服务与容器）
+
+#### 59. 第二轮分批全量回归执行 + Docker 构建前置检查
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 回归测试执行（按分批策略）
+   - `python -m unittest discover -s tests -v -p "test_[a-f]*.py"` → `Ran 346, OK`
+   - `python -m unittest discover -s tests -v -p "test_[g-l]*.py"` → `Ran 89, OK`
+   - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → `Ran 231, OK (skipped=7)`
+   - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → `Ran 492, OK`
+   - 汇总：第二轮分批全量回归 **1158 tests 通过，skipped=7**。
+
+2. Docker 构建前置检查
+   - `docker version --format "{{.Server.Version}}"` 失败
+   - `docker build -t "outlook-email-plus:local-regression-20260415" .` 失败
+   - 原因一致：本机未连接 Docker Engine（`//./pipe/dockerDesktopLinuxEngine` 不存在）
+
+3. 文档回填
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 升级至 v1.4，回填第二轮回归与 Docker 前置状态
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 升级至 v1.3，回填第二轮回归与 Docker 前置状态
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 升级至 v1.3，新增 10.3（第二轮回归 + Docker 校验）
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 新增 13.5（第二轮分批全量回归）与 13.6（Docker 前置校验）
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 升级至 v1.5，新增“第二轮执行回填”
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 新增 4.5（第二轮回归 + Docker 前置检查）
+
+4. 现场状态
+   - 本次包含：测试执行 + Docker 前置检查 + 文档回填 + WORKSPACE 记录
+   - 未新增业务代码实现改动
+   - 服务进程保持后台运行（PID `37460`）
+
+#### 58. webhook.site 请求明细核对完成（成功链路）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 基于用户提供 URL 做接收端核对
+   - URL：`https://webhook.site/00766721-eaaf-4a3b-9821-60575812158c`
+   - 通过 webhook.site API 拉取最新请求明细，确认存在 `POST` 请求记录
+
+2. 核对结果
+   - method：`POST`
+   - content-type：`text/plain; charset=utf-8`
+   - body：包含来源邮箱/来源类型/文件夹/发件人/主题/时间/正文摘要等业务文本字段
+   - `X-Webhook-Token`：当前 token 为空，header 中未出现该字段（符合“仅 token 非空才发送”）
+
+3. 文档同步
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 6.5 进展更新为“成功链路核对完成，失败链路待补”
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 会话进展更新为“请求细节已核对，失败链路待补”
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 10.2 回填接收端核对结果（含 token 为空不发头）
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 13.4 回填 webhook.site 明细核对结果
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 6.8.1 第 4 项勾选完成
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 4.4 补充成功链路明细核对结论
+
+4. 现场状态
+   - 本次包含：接收端核对 + 文档回填 + WORKSPACE 记录
+   - 未新增业务代码实现改动
+   - 未新增服务进程操作（沿用已启动后台进程 PID `37460`）
+
+#### 57. 用户提供 webhook.site 实测地址后完成后台启动与链路验证
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 用户输入
+   - 提供测试地址：`https://webhook.site/00766721-eaaf-4a3b-9821-60575812158c`
+   - 要求先启动服务并进行测试，同时继续更新会话文档与 WORKSPACE
+
+2. 服务状态处理（遵守后台独立进程约束）
+   - 先做连通性检查：`/healthz` 返回 `502`（服务不可用）
+   - 采用后台独立进程方式启动：`Start-Process python web_outlook_app.py`
+   - 实际进程 PID：`37460`
+   - 启动后健康检查：`GET /healthz` 返回 `200`
+
+3. 日志与链路验证
+   - 读取 `service_stderr_20260415_135237.log`，可见：
+     - 首次 `POST /api/settings/webhook-test` 返回 `400`，错误 `WEBHOOK_NOT_CONFIGURED`
+     - 随后保存配置（`PUT /api/settings`）后再次 `POST /api/settings/webhook-test` 返回 `200`
+   - 结论：符合“先保存配置，再测试 webhook”会话硬约束
+
+4. 文档回填
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 升级至 v1.3，回填实测 URL 与后台启动口径
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 升级至 v1.2，回填实测 URL 与执行状态
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 升级至 v1.2，回填后台启动/健康检查/webhook-test 日志结果
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 补充会话手工联调进展（URL、PID、/healthz、webhook-test 400→200）
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 6.8.1 清单中“生成 URL / 保存配置 / 触发测试”已勾选
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 更新版本引用并新增“4.4 实测进展回填”
+
+5. 现场状态
+   - 本次包含：后台启动 + 健康检查 + 日志验证 + 文档回填 + WORKSPACE 记录
+   - 未新增业务代码实现改动
+
+#### 56. webhook.site 分步联调指引文档化与会话输出约束回填
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 会话推进
+   - 用户选择“我带你一步步在 webhook.site 生成并完成配置”。
+   - 用户要求继续保持：
+     - 持续通过 MCP `寸止` 对话；
+     - 每次回复要把结果信息明确告诉用户；
+     - 不能只写文档不反馈。
+
+2. 文档补充（按当前会话实操场景）
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 版本升至 v1.4
+     - 新增 `6.8.1 webhook.site 联调执行清单`
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 新增 `9.2 webhook.site 逐步联调指引（会话实操版）`
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 补充“会话实操建议”步骤（先生成 URL、再保存、再测试）
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 补充“默认推荐 webhook.site 作为第一联调入口”
+
+3. 现场状态
+   - 本次仅更新文档与 WORKSPACE 记录。
+   - 未新增业务代码改动。
+   - 未启动/重启/停止任何服务进程。
+
+#### 55. 会话文档按“无 webhook 地址”实际场景修订并同步执行口径
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 会话场景确认
+   - 用户明确当前没有现成 webhook 地址。
+   - 需要提供可直接落地的配置入口与联调路径。
+   - 执行口径保持：后续联调如需服务运行，仅使用后台独立进程（`Start-Process`/独立进程），不使用前台阻塞命令。
+
+2. 文档修订（按实际环境对齐）
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 版本升至 v1.2
+     - 补充“配置入口（设置 -> 自动化 Tab -> Webhook 通知）”
+     - 补充“无地址时推荐 `https://webhook.site/` + 失败链路 Beeceptor/Pipedream”
+     - 新增会话推荐执行顺序（先保存后测试 + 后台进程约束）
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 版本升至 v1.1
+     - 补充“无现成地址先在 webhook.site 生成临时 URL”
+     - 联调方案中明确配置入口路径
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 版本升至 v1.1
+     - 技术检查清单按当前实现与自动化验证回填为完成态
+     - 补充无地址联调执行口径与后台进程约束
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 版本升至 v1.2
+     - 手工替代方案改为 `https://webhook.site/` 明确链接
+     - 补充“先保存再测试 + 后台独立进程”执行顺序
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 版本升至 v1.3
+     - 同步引用版本（PRD/FD/TD/TDD）
+     - Phase 6.8 补充配置入口与后台进程约束
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 同步文档版本引用
+     - 新增“4.3 会话场景回填（无地址联调口径）”
+
+3. 现场状态
+   - 本次仅更新文档与 WORKSPACE 记录。
+   - 未新增业务代码改动。
+   - 未启动/重启/停止任何服务进程。
+
+#### 54. Webhook 手工联调方案补充与服务后台启动口径对齐
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 会话需求调整
+   - 用户反馈“当前没有可用 webhook 接收端”，需要补充可执行测试方案。
+   - 会话执行口径补充：后台服务仅使用 `Start-Process` 独立进程启动；不使用前台阻塞命令。
+
+2. 服务启动（后台独立进程）
+   - 启动方式：`Start-Process python web_outlook_app.py`（独立进程）
+   - 最新启动结果：PID `35164`
+   - 健康检查：`GET /healthz` 返回 `HTTP 200`
+   - 日志文件：
+     - `service_stdout_20260415_133249.log`
+     - `service_stderr_20260415_133249.log`
+
+3. 文档同步修订（按实际可行性）
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 新增“6.3 无自建接收端时的 Webhook 测试可行性”
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 新增“7.3 无自建接收端时的联调方案（webhook.site / Beeceptor / Pipedream）”
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 新增“9.1 无本地接收端时的手工测试替代”
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 在 Phase 6.8 下补充“无接收端时的替代联调指引”
+
+4. 现场状态
+   - 本次包含：后台启动服务 + 文档更新 + WORKSPACE 记录。
+   - 未进行额外实现代码改动。
+
+#### 53. Webhook/API Key 方案自动化验证回填（分批全量回归通过）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 现状核对
+   - 对照 TODO 与现有代码，确认本需求相关实现/测试文件均已存在：
+     - 后端：`settings.py` / `webhook_push.py` / `notification_dispatch.py` / `routes/settings.py`
+     - 前端：`templates/index.html` / `static/js/main.js` / `static/js/i18n.js`
+     - 测试：`test_settings_webhook.py` / `test_webhook_push.py` / `test_settings_webhook_frontend_contract.py` / `test_notification_dispatch.py`
+
+2. 定向自动化测试
+   - `python -m unittest tests.test_settings_webhook -v` → Ran 9, OK
+   - `python -m unittest tests.test_webhook_push -v` → Ran 7, OK
+   - `python -m unittest tests.test_notification_dispatch -v` → Ran 25, OK
+   - `python -m unittest tests.test_settings_webhook_frontend_contract -v` → Ran 4, OK
+   - `python -m unittest tests.test_v190_frontend_contract -v` → Ran 18, OK
+   - `python -m unittest tests.test_settings_tab_refactor_backend -v` → Ran 14, OK
+   - `python -m unittest tests.test_settings_tab_refactor_frontend -v` → Ran 12, OK
+
+3. 分批全量回归（遵守单命令超时约束）
+   - `python -m unittest discover -s tests -v -p "test_[a-f]*.py"` → Ran 346, OK
+   - `python -m unittest discover -s tests -v -p "test_[g-l]*.py"` → Ran 89, OK
+   - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → Ran 231, OK (skipped=7)
+   - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → Ran 492, OK
+   - 汇总：**1158 tests 通过，skipped=7**。
+
+4. 文档回填
+   - 更新 `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`（v1.2）
+   - 更新 `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.1）
+   - 更新 `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+   - 更新 `CHANGELOG.md`（Unreleased：功能、验证、已知风险）
+
+5. 现场状态
+   - 本次仅执行测试与文档回填。
+   - 未启动/重启/停止任何服务进程。
+   - 未新增实现代码改动。
+
+---
+
+## 2026-04-14
+
+### 操作记录
+
+#### 52. 产出“其它 AI 驱动使用”的执行提示词文档
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 新建 AI 执行提示词文档
+   - 文件：`docs/DEV/2026-04-14-通用Webhook通知与APIKey易用性增强-AI执行提示词.md`
+   - 目标：供其它 AI 直接按会话冻结口径执行实现，避免偏离 PRD/TD/TODO
+   - 内容覆盖：
+     - 必读文档顺序（PRD/FD/TD/TDD/TODO/联调检查）
+     - 允许修改文件清单（后端/前端/测试）
+     - 强约束（webhook-test 仅已保存配置、前端算法生成 key、不引入新依赖）
+     - 分阶段实施顺序与关键防跑偏提示
+     - 测试命令、交付标准、禁止事项
+
+2. TODO 头部联动
+   - 文件：`docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+   - 补充 “AI 执行提示词” 引用路径，形成“规范 → 执行提示词 → 任务拆分”闭环
+
+3. 现场状态
+   - 本次仅更新文档（新增 DEV 提示词 + TODO 引用 + WORKSPACE 记录）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+4. 会话后续调整（同日）
+   - 按用户“删除文档，提示词直接会话提供”要求：
+     - 已删除：`docs/DEV/2026-04-14-通用Webhook通知与APIKey易用性增强-AI执行提示词.md`
+     - TODO 头部“AI 执行提示词”改为：`按会话实时提供（不落库文档）`
+   - 说明：该调整只改变提示词存放方式，不影响 PRD/FD/TD/TDD/TODO 主链路。
+
+#### 51. 基于 TODO 再次联调并回填进度（Phase 0 完成）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 按用户要求执行“面向 TODO 的联调”
+   - 以 `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md` 为中心
+   - 对照 PRD/FD/TD/TDD/联调检查文档逐项核对会话口径
+
+2. TODO 文档回填
+   - 文件：`docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+   - 回填内容：
+     - 增加更新日期（v1.1）
+     - 任务概览中 `Phase 0` 状态改为 `✅ 已完成`
+     - `Task 0.1~0.3` 全部勾选完成（含三条会话硬约束）
+
+3. 联调检查文档回填
+   - 文件：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+   - 新增“TODO 联调回填（2026-04-14）”段落：
+     - 明确 TODO Phase 0 已完成
+     - 明确文档引用链与会话约束已固化
+
+4. 现场状态
+   - 本次仅更新文档（TODO + 联调检查 + WORKSPACE 记录）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 50. 新建 TODO 任务拆分并完成文档链路闭环（Webhook + API Key）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 新建 TODO 执行拆分文档
+   - 文件：`docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+   - 结构：
+     - Phase 0~7 分阶段任务
+     - 每阶段具体文件与检查点
+     - 测试命令、通过标准、会话硬约束
+
+2. 会话文档链路闭环更新
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+   - 以上文件均补齐 TODO 引用，形成 PRD→FD→TD→TDD→TODO 完整链路。
+
+3. 会话约束再确认（写入 TODO）
+   - `webhook-test` 仅使用已保存配置
+   - API Key 随机值由前端 `crypto.getRandomValues` 算法生成
+   - 不引入新库/新架构层
+
+4. 现场状态
+   - 本次仅更新文档（新增 TODO + 多文档引用修正 + WORKSPACE 记录）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 49. PRD/FD/TD/TDD 联调校正（确保不偏离会话 PRD）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 按会话要求执行文档联调
+   - 目标：确保 FD/TD/TDD 不偏离 PRD 与会话确认口径
+   - 对照范围：本次新增主题的 PRD/FD/TD/TDD 四份文档
+
+2. PRD 校正（v1.0 → v1.1）
+   - 文件：`docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+   - 校正点：
+     - 明确 `X-Webhook-Token` 为可选头（token 非空才发送）
+     - 明确 `webhook-test` 仅使用已保存配置（先保存再测试）
+     - FR 表与 UAT 条款同步上述口径
+
+3. 新增联调检查记录文档
+   - 文件：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+   - 内容：
+     - 四文档关键口径一致性矩阵
+     - 本轮发现与修正项
+     - 联调结论与下一步建议
+
+4. 现场状态
+   - 本次仅更新文档（PRD + 联调检查 + WORKSPACE 记录）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 48. 基于 PRD+FD+TD 新建 TDD（通用 Webhook + API Key 易用性）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 新建 TDD 文档
+   - 新增：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+   - 覆盖测试分层与矩阵：
+     - Settings/API：webhook 配置读写、URL 校验、token 脱敏/加密
+     - Webhook Service：2xx 判定、10s 超时、失败重试1次、header 规则
+     - Notification Dispatch：新增 webhook 通道与 Email/Telegram 并存回归
+     - Frontend 契约：Webhook 卡片字段、测试按钮、随机/复制函数、i18n 词条
+     - 手工冒烟：覆盖确认、复制、保存前后持久化差异
+
+2. 会话文档联动更新
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 补齐关联 TDD 引用
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 补齐关联 TDD 引用
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 补齐关联 TDD 引用
+
+3. 口径对齐说明
+   - 保持会话确认：
+     - `webhook-test` 只用已保存配置
+     - API Key 随机值使用前端原生 `crypto.getRandomValues` 算法生成
+     - 不引入新增第三方库或新架构层
+
+4. 现场状态
+   - 本次仅进行文档新增与更新（PRD/FD/TD/TDD/WORKSPACE）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 47. 基于 PRD+FD 新建 TD（通用 Webhook + API Key 易用性）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 会话技术口径确认
+   - `webhook-test` 仅使用已保存配置（不接受临时覆盖参数）
+   - API Key 随机值在前端本地生成（`crypto.getRandomValues`）
+   - 不引入新库/新架构层，按现有代码能力扩展
+
+2. 新建 TD 文档
+   - 新增：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+   - 主要内容：
+     - 代码锚点基线（settings route/controller、notification_dispatch、index/main.js/i18n）
+     - 核心决策（不改 schema、不加新依赖、测试口径、随机算法）
+     - 后端设计（settings getter、`/api/settings/webhook-test`、`webhook_push.py`、dispatch 接入）
+     - 前端设计（自动化Tab卡片、main.js 加载/保存/测试、API Key 随机与复制）
+     - 接口契约、错误码建议、安全与回滚、实施顺序与技术检查清单
+
+3. 会话文档联动修正
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 补齐关联 FD/TD 引用
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 补齐关联 TD 引用，并将“TD 阶段待细化”改为“已进入 TD 阶段”
+
+4. 现场状态
+   - 本次仅进行文档新增与更新（PRD/FD/TD/WORKSPACE）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 46. 基于 PRD 新建 FD（通用 Webhook + API Key 易用性）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 会话口径补充确认
+   - 通过会话确认两项设计约束：
+     - Webhook 卡片放置于 `自动化 Tab` 通知区
+     - Webhook Token 为可选；为空时不发送 `X-Webhook-Token`
+
+2. 新建 FD 文档
+   - 新增：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+   - 覆盖内容包括：
+     - 页面布局与交互（Webhook 卡片、测试按钮、API Key 随机/复制）
+     - 通道行为与投递协议（`POST text/plain; charset=utf-8`、10s、重试1次、2xx 成功）
+     - 配置契约（settings 键建议）、测试接口设计（`/api/settings/webhook-test`）
+     - 数据流、错误提示口径、验收清单与风险项
+
+3. 现场状态
+   - 本次仅更新会话文档（新增 FD + 更新 WORKSPACE 记录）。
+   - 未修改业务代码，未启动/重启/停止任何服务进程。
+
+#### 45. Issue #42 需求澄清与 PRD 新建（通用 Webhook + API Key 易用性）
+
+**时间**：2026-04-14
+
+**本次操作**：
+
+1. 需求读取与现状核对
+   - 读取并分析：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/42`
+   - 本地核对现状：
+     - 设置页 API 安全区（`templates/index.html`）
+     - 设置页保存链路（`static/js/main.js` / `outlook_web/controllers/settings.py`）
+     - 通知分发链路（`outlook_web/services/notification_dispatch.py`）
+   - 结论：Issue 值得做，且应由“企业微信专属”收敛为“通用 Webhook 通道”。
+
+2. 会话需求澄清结果（按用户确认）
+   - 范围：`通用 Webhook 通知 + API Key 随机生成/复制`
+   - Webhook 与现有通知链路口径一致（触发/参与规则一致）
+   - 配置粒度：全局单 Webhook URL，账号沿用现有通知参与开关
+   - 协议：`POST text/plain; charset=utf-8`
+   - URL：支持 `http/https`
+   - 鉴权：固定 Header `X-Webhook-Token`
+   - 投递策略：超时 10s，失败重试 1 次
+   - 可观测性：设置页提供测试按钮；失败前端可见 + 后端日志可查
+   - 文本模板：来源邮箱/来源类型/文件夹/发件人/主题/时间/正文摘要
+   - API Key 易用性：
+     - 64 位 URL-safe 随机生成
+     - 输入框旁提供“随机生成 + 复制”
+     - 已有值时覆盖前二次确认
+     - 生成与复制不自动保存，仍需点击“保存设置”生效
+
+3. 文档落地
+   - 新建 PRD：
+     - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+   - PRD 已记录：背景、范围、FR/NFR、验收标准、非目标与风险项。
+
+4. 现场状态
+   - 本次仅进行文档新增与记录；未修改业务代码、未启动/重启/停止服务进程。
+
+---
+
 ## 2026-04-13
 
 ### 操作记录
