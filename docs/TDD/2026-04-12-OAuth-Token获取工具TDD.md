@@ -1,8 +1,8 @@
 # TDD: OAuth Token 获取工具
 
-- 文档版本: v1.2
+- 文档版本: v1.3
 - 创建日期: 2026-04-12
-- 更新日期: 2026-04-16（v1.2 — 前端引导与 Scope 默认口径同步、会话回归结果回填）
+- 更新日期: 2026-04-16（v1.3 — 会话文档按实际实现口径再同步）
 - 文档类型: 测试设计文档（TDD）
 - 关联 PRD: `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
 - 关联 FD: `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
@@ -20,8 +20,11 @@
 > - `AADSTS9002331` 的引导应明确提示：不要使用 `PersonalMicrosoftAccount`，而应切到 `AzureADandPersonalMicrosoftAccount`
 > - 若文档涉及 Azure 门户切换 Supported account types，应补充 `api.requestedAccessTokenVersion = 2` 的前置约束
 > - 2026-04-16 前端已加入新手引导折叠记忆（`token_tool_guide_dismissed`）与教程链接扩展位（`GUIDE_TUTORIAL_LINKS`）
+> - 2026-04-16 会话回归记录：unittest 分批执行累计 `1158 passed / 7 skipped`；Jest 在当前环境因缺少 `jest-environment-jsdom` 未通过（环境依赖问题）
 >
 > 文中早前关于 `client_secret` 加密存储回传、可变 tenant、tenant-aware / client-secret-aware 保存验证的测试设计，均属于历史口径，不再作为当前测试基线。
+
+> 注：本文主体保留了实施前测试设计清单，便于追溯；与当前仓库实现冲突时，以 `outlook_web/controllers/token_tool.py`、`templates/token_tool.html`、`static/js/features/token_tool.js` 和现有测试结果为准。
 
 ---
 

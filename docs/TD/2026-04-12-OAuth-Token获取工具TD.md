@@ -1,8 +1,8 @@
 # TD: OAuth Token 获取工具
 
-- 文档版本: v1.4
+- 文档版本: v1.5
 - 创建日期: 2026-04-12
-- 更新日期: 2026-04-16（v1.4 — 前端引导卡片与 Scope 默认口径按实现回填）
+- 更新日期: 2026-04-16（v1.5 — 会话文档按实际实现口径再同步）
 - 文档类型: 技术细节设计
 - 关联 PRD: `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
 - 关联 FD: `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
@@ -20,7 +20,7 @@
 > - 若 Azure 门户在切换该受支持账户类型时报 `api.requestedAccessTokenVersion is invalid`，需先在 Manifest 中把 `api.requestedAccessTokenVersion` 改成 `2`
 > - 2026-04-16 已落地前端新手引导机制：`<details id="guide-card">` + `localStorage(token_tool_guide_dismissed)` 记忆 + `GUIDE_TUTORIAL_LINKS` 扩展位
 >
-> 本文较早伪代码中若仍保留可变 tenant、`client_secret` 加密存储/回传、tenant-aware 或 client-secret-aware 保存链路，均已被当前实现收口逻辑取代。
+> 本文较早伪代码中若仍保留可变 tenant、`client_secret` 加密存储/回传、tenant-aware 或 client-secret-aware 保存链路，均已被当前实现收口逻辑取代。**最终以 `outlook_web/controllers/token_tool.py`、`templates/token_tool.html`、`static/js/features/token_tool.js` 的当前代码为准。**
 
 ---
 
@@ -113,7 +113,7 @@ def test_refresh_token_with_rotation(
 **复用点**:
 - OAuth Token 工具的 `/save` 接口需调用 `test_refresh_token_with_rotation()` 验证新获取的 token 有效性
 - Token endpoint URL 模式相同，但 OAuth 工具使用 `grant_type=authorization_code`（非 `refresh_token`）
-- 新工具需支持可变 tenant（`/consumers/`、`/common/`、`/organizations/`、自定义 tenant ID），而非硬编码 `/common/`
+- 当前工具固定兼容模式 tenant=`consumers`，可变 tenant 设计不在本期实现范围
 
 ### 2.3 加密体系
 
@@ -141,7 +141,7 @@ def decrypt_data(encrypted_data: str) -> str:
 **密钥派生**: PBKDF2 + SHA256 + 固定盐 `b"outlook_email_encryption_salt_v1"`，从 `SECRET_KEY` 派生
 
 **本期使用场景**:
-- Settings 表的 `oauth_tool_client_secret` 使用 `encrypt_data()` 加密存储
+- `oauth_tool_client_secret` 在兼容模式下固定为空值（不参与保存链路）
 - 账号表的 `refresh_token` 写入时使用 `encrypt_data()` 加密（复用现有 `add_account` 逻辑）
 
 ### 2.4 Settings 存储

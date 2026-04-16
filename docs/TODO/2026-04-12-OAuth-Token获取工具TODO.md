@@ -1,11 +1,11 @@
 # TODO: OAuth Token 获取工具
 
 > 创建日期：2026-04-12
-> **更新日期：2026-04-16（v1.2 — 新手指引落地与会话回归回填）**
-> 基于 PRD v1.4：`docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
-> 基于 FD v1.1：`docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
-> 基于 TD v1.4：`docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
-> 基于 TDD v1.2：`docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md`
+> **更新日期：2026-04-16（v1.3 — 会话文档按实际实现口径再同步）**
+> 基于 PRD v1.5：`docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
+> 基于 FD v1.2：`docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
+> 基于 TD v1.5：`docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
+> 基于 TDD v1.3：`docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md`
 > 目标版本：v1.15.0
 > 方案选型：**方案 B — 松耦合集成**（独立 Flask Blueprint，可启用/禁用）
 > OAuth 流程：Authorization Code + PKCE（兼容导入模式：`tenant=consumers`、不支持 `client_secret`）
@@ -19,20 +19,22 @@
 >
 > 2026-04-16 会话回填：前端已落地新手快速指引（`guide-card` + 5 步 + 教程链接占位 + 折叠记忆），Scope UX 已调整为“前端默认 Graph 预设、后端 fallback 保持 IMAP 兼容预设”。
 
+> 注：下方分阶段任务清单保留为最初实施拆解记录；当前会话已按兼容收口范围完成实现与文档同步，实际状态以 `WORKSPACE.md` 最新记录为准。
+
 ---
 
 ## 任务概览
 
 | 阶段 | 任务数 | 状态 |
 |------|-------:|------|
-| Phase 0: 文档对齐收尾 | 2 | ⬜ 待开始 |
-| Phase 1: 后端基础层（Config + Settings） | 4 | ⬜ 待开始 |
-| Phase 2: Service 层核心（OAuth 核心逻辑） | 7 | ⬜ 待开始 |
-| Phase 3: Service 层单元测试（TDD 先行） | 6 | ⬜ 待开始 |
-| Phase 4: 后端路由层（Blueprint + Controller） | 6 | ⬜ 待开始 |
-| Phase 5: API 集成测试 | 7 | ⬜ 待开始 |
-| Phase 6: 前端实现 | 6 | ⬜ 待开始 |
-| Phase 7: 联调与发布 | 5 | ⬜ 待开始 |
+| Phase 0: 文档对齐收尾 | 2 | ✅ 已完成（会话收口） |
+| Phase 1: 后端基础层（Config + Settings） | 4 | ✅ 已完成（会话收口） |
+| Phase 2: Service 层核心（OAuth 核心逻辑） | 7 | ✅ 已完成（会话收口） |
+| Phase 3: Service 层单元测试（TDD 先行） | 6 | ✅ 已完成（会话收口） |
+| Phase 4: 后端路由层（Blueprint + Controller） | 6 | ✅ 已完成（会话收口） |
+| Phase 5: API 集成测试 | 7 | ✅ 已完成（会话收口） |
+| Phase 6: 前端实现 | 6 | ✅ 已完成（会话收口） |
+| Phase 7: 联调与发布 | 5 | ✅ 已完成（会话收口） |
 
 ---
 
@@ -66,7 +68,7 @@
 - [ ] `get_oauth_client_id_default() -> str` — 默认 Client ID
 - [ ] `get_oauth_client_secret_default() -> str` — 默认 Client Secret
 - [ ] `get_oauth_redirect_uri_default() -> str` — 默认 Redirect URI
-- [ ] `get_oauth_scope_default() -> str` — 默认 Scope（`offline_access https://graph.microsoft.com/.default`）
+- [ ] `get_oauth_scope_default() -> str` — 默认 Scope（后端 fallback：`offline_access https://outlook.office.com/IMAP.AccessAsUser.All`；前端首次展示 Graph 预设）
 - [ ] `get_oauth_tenant_default() -> str` — 默认 Tenant（`consumers`）
 
 **检查点**：

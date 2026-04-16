@@ -1,8 +1,8 @@
 # FD: OAuth Token 获取工具
 
-- 文档版本: v1.1
+- 文档版本: v1.2
 - 创建日期: 2026-04-12
-- 更新日期: 2026-04-16（v1.1 — 新手指引落地回填 + Graph 推荐口径同步）
+- 更新日期: 2026-04-16（v1.2 — 会话文档按实际实现口径再同步）
 - 关联 PRD: `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
 - 关联 TD: `docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
 - 当前范围: 功能设计,定义系统行为、接口契约、数据流、前后端交互
@@ -29,7 +29,7 @@
 在系统内提供一个独立的 OAuth Token 获取工具,以**浏览器新窗口**形式打开,用户可交互式登录 Microsoft 账号,获取 `refresh_token`,并一键写入系统账号。
 
 1. **独立窗口**: 从主界面侧边栏点击打开,`window.open()` 方式,不影响主页面 SPA 状态
-2. **OAuth2 + PKCE**: Authorization Code Flow with PKCE (S256),支持可选 `client_secret`
+2. **OAuth2 + PKCE**: Authorization Code Flow with PKCE (S256)，兼容模式固定禁用 `client_secret`
 3. **智能回调**: 优先自动回调,远程部署场景降级为手动粘贴回调 URL
 4. **一键写入**: 获取 token 后可写入已有账号或创建新账号
 5. **配置持久化**: OAuth 参数保存到服务端 Settings 表,跨设备同步
@@ -46,7 +46,7 @@
 - ✅ Scope chips UI + 预设按钮
 - ✅ Azure 注册指引折叠卡片
 - ✅ 常见错误中文引导
-- ✅ Tenant 选择器（下拉 + 可输入）
+- ✅ 兼容模式约束校验（固定 `tenant=consumers`）
 - ✅ 配置持久化到 Settings 表
 
 **本期不包含**:
@@ -487,7 +487,7 @@ OAuth 弹窗被 Microsoft 重定向后,渲染一个简单的结果页面:
 }
 ```
 
-**说明**: 写入 Settings 表,`client_secret` 使用 `encrypt_data()` 加密存储。
+**说明**: 写入 Settings 表时，`client_secret` 固定写空；`tenant` 固定写 `consumers`。
 
 ---
 
@@ -871,7 +871,7 @@ def inject_app_version():
 | Key | 类型 | 说明 | 加密 |
 |-----|------|------|------|
 | `oauth_tool_client_id` | string | Client ID | ❌ |
-| `oauth_tool_client_secret` | string | Client Secret | ✅ encrypt_data() |
+| `oauth_tool_client_secret` | string | Client Secret（兼容模式固定空值） | ❌ |
 | `oauth_tool_redirect_uri` | string | Redirect URI | ❌ |
 | `oauth_tool_scope` | string | Scope（空格分隔） | ❌ |
 | `oauth_tool_tenant` | string | Tenant | ❌ |
@@ -910,7 +910,7 @@ def inject_app_version():
 
 | 数据 | 存储位置 | 加密方式 |
 |------|---------|---------|
-| `client_secret` | Settings 表 | `encrypt_data()` |
+| `client_secret` | 不落库（固定空值） | 不适用 |
 | `refresh_token` | accounts 表 | `encrypt_data()` |
 | PKCE `verifier` | 内存 OAUTH_FLOW_STORE | 不持久化,20 分钟自动清理 |
 | OAuth `state` | Session cookie + 内存 | HttpOnly + 内存 TTL |
@@ -930,7 +930,7 @@ def inject_app_version():
 |--------|--------|------|
 | `OAUTH_TOOL_ENABLED` | `true` | 是否启用 Token 工具 Blueprint |
 | `OAUTH_CLIENT_ID` | 空 | 默认 Client ID |
-| `OAUTH_CLIENT_SECRET` | 空 | 默认 Client Secret |
+| `OAUTH_CLIENT_SECRET` | 空 | 兼容模式固定空值（不参与页面输入） |
 | `OAUTH_REDIRECT_URI` | 空（自动检测） | 默认 Redirect URI |
 | `OAUTH_SCOPE` | `offline_access https://outlook.office.com/IMAP.AccessAsUser.All` | 后端环境变量默认 Scope（兼容 fallback） |
 | `OAUTH_TENANT` | `consumers` | 默认 Tenant |
