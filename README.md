@@ -11,14 +11,14 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 - **专为注册而生**：尽量减少注册流程中不必要的操作。你可以一键复制邮箱地址；在注册页发送验证邮件后，回到管理器点击“验证码”，即可自动拉取最新验证邮件，并用正则快速提取验证码或验证链接，尽量减少等待。
 - **更轻、更专注**：舍弃发件等非核心能力，界面更清爽，所有设计都围绕“把注册跑通”。
 - **导入兼容更广**：支持主流邮箱导入（Gmail、QQ、163 等），也支持自定义 IMAP 服务器。即使是自建邮箱也能使用；内置 CF Worker 临时邮箱，支持多域配置与 Admin Key 加密，大幅降低注册场景的隐私泄露风险。
-- **支持自动化**：对外提供接口，支持批量自动化注册流程；邮箱池支持 `project_key` 项目隔离领取，同一项目内已领取过且仍可回到候选池的邮箱不会被重复分配，但 `claim-complete(result=success)` 后账号仍会被全局标记为 `used`，跨项目复用当前尚未支持；获取接码与释放邮箱等能力一应俱全。
+- **支持自动化**：对外提供接口，支持批量自动化注册流程；邮箱池支持 `project_key` 项目隔离领取。对于长期邮箱，在领取阶段显式传入 `project_key + caller_id + task_id` 时，同项目成功账号不会被重复分配，`claim-complete(result=success)` 后会直接回到 `available`，并可被其他项目立即复用；临时邮箱 / `cloudflare_temp_mail` 继续沿用旧语义。获取接码与释放邮箱等能力一应俱全。
 - **第三方通知**：支持第三方渠道通知，当前已接入 Telegram；重点邮箱收到邮件可自动推送提醒。
 
 简而言之，OutlookMail Plus 是一款为“注册流程”打造的邮箱管理器。
 
 ## 演示站点
 
-演示站点：https://gbcoinystsyz.ap-southeast-1.clawcloudrun.com
+演示站点：https://demo.outlookmailplus.tech/
 登录密码：`12345678`
 
 站点内置 10 个邮箱账号用于演示，数据会定期重置。请勿删除演示账号或将其用于个人用途。
@@ -65,7 +65,7 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 - 修复了浏览器缓存旧 JS 文件的问题
 
 **邮箱池增强**
-- 项目隔离领取策略（PR#27）：`claim-random` 支持传入 `project_key`，用于同一 `caller_id + project_key` 下的防重复领取；该能力不改变 `claim-complete(result=success)` 后全局 `used` 的现有语义（DB v17）
+- 项目维度成功复用（v1.18.0 / DB v22）：长期邮箱在显式 `project_key + caller_id + task_id` 路径下，`claim-random` 改为按“同项目 success 记录”防重，`claim-complete(result=success)` 后直接回到 `available`，支持跨项目立即复用；未传 `project_key` 与 `cloudflare_temp_mail` 继续保持旧语义
 
 **CF Worker 临时邮箱**
 - 多域支持：可在设置页配置多个 CF Worker 域名，新增"同步域名"按钮一键刷新域名列表
@@ -98,7 +98,7 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 - 邮件读取与提取
   支持验证码、链接、原文内容读取
 - 邮箱池调度
-  支持可领取、释放、完成、冷却恢复、过期回收等状态流转；支持 `project_key` 项目隔离，在账号仍处于可回池语义时避免同项目重复分配；当前 `success` 完成后账号会进入全局 `used`，尚不支持成功后的跨项目复用；`claim-random` 支持 `provider=cloudflare_temp_mail` 且池空时动态创建 CF 邮箱
+  支持可领取、释放、完成、冷却恢复、过期回收等状态流转；长期邮箱支持 `project_key` 项目维度成功复用：同项目按 success 记录防重复领取，`success` 后回到 `available`，跨项目可立即复用；未传 `project_key` 与 `provider=cloudflare_temp_mail` / 临时邮箱继续保持旧语义；`claim-random` 仍支持池空时动态创建 CF 邮箱
 - 受控对外接口
   支持 `X-API-Key` 鉴权、多调用方 Key 管理、邮箱范围授权、IP 白名单和速率限制
 - 通知能力

@@ -419,7 +419,7 @@ Request body:
 
 | `result` | Meaning | Final `pool_status` |
 | --- | --- | --- |
-| `success` | registration succeeded and the mailbox was consumed | `used` |
+| `success` | registration succeeded; project-reuse claims return to pool, legacy paths stay consumed | `available` or `used` |
 | `verification_timeout` | no verification code arrived in time | `cooldown` |
 | `provider_blocked` | provider-side block or restriction | `frozen` |
 | `credential_invalid` | invalid credentials | `retired` |
@@ -427,9 +427,13 @@ Request body:
 
 Current implementation notes:
 
-- `success` marks the mailbox as globally `used`
-- `project_key` only affects duplicate-prevention during `claim-random`; it does not change the global terminal state after `success`
-- the current version does not support project-scoped reuse of the same mailbox after success, so a successful mailbox cannot be claimed again across projects
+- the `claim-complete` request shape has **not changed**; whether project reuse applies is derived entirely from the claim context already bound during `claim-random`
+- for long-lived mailboxes, when `claim-random` used a non-empty `project_key` and the callback keeps the original `caller_id / task_id`:
+  - future claims in the same project are blocked by recorded success history
+  - `claim-complete(result=success)` returns `pool_status=available`
+  - the mailbox can be immediately claimed again by other projects
+- when `project_key` is missing/blank, or for `provider=cloudflare_temp_mail` / temp-mail accounts, `success` keeps the legacy `used` behavior
+- `/api/external/pool/stats` still aggregates only `accounts.pool_status`; there is no separate project-success counter in the response
 - for `provider=cloudflare_temp_mail`:
   - `result in ('success','credential_invalid')` triggers a best-effort remote mailbox deletion
   - deletion failure is non-blocking and does not break `claim-complete` success response
@@ -459,10 +463,12 @@ Success response example:
   "message": "success",
   "data": {
     "account_id": 123,
-    "pool_status": "used"
+    "pool_status": "available"
   }
 }
 ```
+
+Note: if the original claim did not enter the long-lived mailbox project-reuse path, the same `result=success` callback can still return `pool_status="used"`.
 
 #### Copy-paste Example (abort task: claim-release)
 
@@ -571,7 +577,7 @@ The mailbox stays `claimed`, then moves to `cooldown` after lease expiration, an
 
 ### Q4: Can the same mailbox be reused in another project after `success`?
 
-Not in the current version. `success` marks the mailbox as globally `used`.
+Yes, but only on the long-lived mailbox project-reuse path: the original claim must include a non-empty `project_key`, and the callback must keep the same `caller_id / task_id`. In that case, `success` returns the mailbox to `available`, blocks the same project by recorded success history, and allows immediate reuse by other projects. Claims without `project_key` and temp-mail paths still end in `used`.
 
 ### Q5: Why does `no_available_account` still use HTTP 200?
 

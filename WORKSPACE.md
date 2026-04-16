@@ -8,6 +8,61 @@
 
 ### 操作记录
 
+#### 126. README 与对外 API 文档同步更新：演示地址切换为 demo.outlookmailplus.tech
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. README 文档更新
+   - 更新 `README.md`
+   - 更新 `README.en.md`
+   - 演示地址统一切换为：`https://demo.outlookmailplus.tech/`
+   - 登录密码保持不变：`12345678`
+   - 同步修正文档中的邮箱池语义，改为当前真实实现：长期邮箱在显式 `project_key + caller_id + task_id` 路径下支持项目维度 success 复用
+
+2. 对外 API 文档更新
+   - 更新 `注册与邮箱池接口文档.md`
+   - 更新 `registration-mail-pool-api.en.md`
+   - 修正 `claim-complete(result=success)` 的真实语义：
+     - 项目复用路径返回 `pool_status=available`
+     - 旧路径 / `cloudflare_temp_mail` / 临时邮箱继续返回 `used`
+   - 明确请求结构未新增字段，项目复用依赖 claim 阶段绑定的上下文
+
+3. 当前状态
+   - 文档已按当前实现与当前演示地址完成回填
+   - 下一步：整理变更并提交
+
+#### 125. v1.18.0 retag 闭环：标签已对齐 79e3011 并重新触发发布链路
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. tag 锚点修复
+   - 复核发现本地与远端 `v1.18.0` peeled commit 仍指向旧提交：`8bfeea8`
+   - 已重新执行：
+     - `git tag -fa v1.18.0 79e301132b7b1e4f1571b8a2bd0ce1e4fe417e82 -m 'v1.18.0 (retag after formatter gate fix)'`
+     - `git push origin :refs/tags/v1.18.0`
+     - `git push origin v1.18.0`
+   - 当前本地与远端 `v1.18.0` peeled commit 已一致指向：`79e3011`
+
+2. Release 与附件状态
+   - `gh release view v1.18.0` 仍可正常访问
+   - Release 页面未丢失，附件保持为 formatter 修复后的最新版本：
+     - `outlook-email-plus-v1.18.0-docker.tar` → `sha256:07930496cefd3ab5a72f6857bf5fdce6317aa2ec77e8254618e8d7f7457d99e8`
+     - `outlookEmailPlus-v1.18.0-src.zip` → `sha256:820e2f310da4fafb71a8915c9d779037716167a28c8843f610bcd84b1993b6f8`
+
+3. 重新触发的工作流状态
+   - `Code Quality`（main, `79e3011`）✅ success
+   - `Python Tests`（main, `79e3011`）✅ success
+   - `Build and Push Docker Image`（main, `79e3011`）✅ success
+   - `Build and Push Docker Image`（tag: `v1.18.0`, `79e3011`）✅ success
+
+4. 当前结论
+   - Release 页面、Release 附件、远端 tag、远端 main HEAD 已重新对齐到同一提交：`79e3011`
+   - `main` 与 `v1.18.0` 对应的质量门禁、测试、Docker 发布链路现已全部恢复为成功状态
+
 #### 124. v1.18.0 发布后检查：Release 成功，远端质量门禁仍有阻塞
 
 **时间**：2026-04-16

@@ -11,14 +11,14 @@ Unlike general-purpose email clients, it focuses on **registration and verificat
 - **Built for registration workflows**: it removes unnecessary steps as much as possible. You can copy mailbox addresses with one click; after sending a verification email on a signup page, you can return to the manager, click "Verification Code", fetch the latest email, and quickly extract the code or verification link with regex.
 - **Lighter and more focused**: non-core features such as sending mail are intentionally left out, so the interface stays cleaner and every design choice is centered on completing registration tasks.
 - **Broader import compatibility**: it supports mainstream mailbox providers such as Gmail, QQ, and 163, as well as custom IMAP servers. Self-hosted mailboxes also work. Built-in CF Worker temp mailboxes support multi-domain configuration and Admin Key encryption, significantly reducing privacy exposure in registration workflows.
-- **Automation-friendly**: it exposes APIs for batch registration workflows; the mail pool supports project-scoped claiming via `project_key`, so a mailbox that can re-enter the candidate pool is not re-claimed within the same project, but `claim-complete(result=success)` still marks the account as globally `used`, so cross-project reuse after success is not supported yet. Mailbox claiming, verification-code retrieval, and release are all covered.
+- **Automation-friendly**: it exposes APIs for batch registration workflows; the mail pool supports project-scoped claiming via `project_key`. For long-lived mailboxes, when `project_key + caller_id + task_id` are explicitly provided during claim, a mailbox with a recorded success in the same project will not be re-claimed, and `claim-complete(result=success)` returns it directly to `available`, allowing immediate reuse by other projects. Temp mail / `cloudflare_temp_mail` keep the legacy behavior. Mailbox claiming, verification-code retrieval, and release are all covered.
 - **Third-party notifications**: third-party notification channels are supported. Telegram is already integrated, and important mailboxes can push alerts automatically.
 
 In short, OutlookMail Plus is a mailbox manager designed specifically for registration workflows.
 
 ## Demo Site
 
-Demo site: https://gbcoinystsyz.ap-southeast-1.clawcloudrun.com  
+Demo site: https://demo.outlookmailplus.tech/  
 Login password: `12345678`
 
 The site includes 10 mailbox accounts for demonstration. Data is periodically reset. Please do not delete the demo accounts or use them for personal purposes.
@@ -60,7 +60,7 @@ Highlights include:
 - Fixed browser caching stale JS files
 
 **Mail Pool Enhancements**
-- Project-scoped claim isolation (PR#27): `claim-random` now accepts a `project_key` parameter to prevent re-claiming under the same `caller_id + project_key` combination; this does not change the current `claim-complete(result=success) => globally used` behavior (DB v17)
+- Project-scoped success reuse (v1.18.0 / DB v22): for long-lived mailboxes claimed with explicit `project_key + caller_id + task_id`, duplicate prevention now keys off same-project success history, and `claim-complete(result=success)` returns the mailbox to `available` for immediate cross-project reuse; requests without `project_key` and `cloudflare_temp_mail` still keep the legacy behavior
 
 **CF Worker Temp Mail**
 - Multi-domain support: multiple CF Worker domains can now be configured in the Settings page; a new "Sync Domains" button refreshes the domain list in one click
@@ -91,7 +91,7 @@ Highlights include:
 - Mail reading and extraction
   Supports verification-code extraction, link extraction, and raw message viewing
 - Mail pool orchestration
-  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling; supports `project_key` project-scoped isolation to avoid re-claiming within the same project while the account can still return to the pool; after `success`, the account is still moved to globally `used`, so cross-project reuse after success is not supported yet
+  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling; long-lived mailboxes support project-scoped success reuse: same-project claims are blocked by recorded success history, and `success` returns the mailbox to `available` for immediate reuse by other projects; requests without `project_key` and `provider=cloudflare_temp_mail` / temp-mail accounts keep the legacy behavior
 - Controlled external APIs
   Supports `X-API-Key` authentication, multiple consumer keys, mailbox scope restrictions, IP allowlists, and rate limits
 - Notification delivery
