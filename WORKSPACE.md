@@ -4,6 +4,618 @@
 
 ---
 
+## 2026-04-18
+
+### 操作记录
+
+#### 159. UI/UX 优化：删除独立浮窗、主界面移除项目Key、宽度自适应
+
+**时间**：2026-04-18
+
+**修改**：
+
+| 文件 | 修改内容 |
+|------|---------|
+| `popup.html` | 删除 `⤢` 独立浮窗按钮；移除主界面「项目 Key」输入框；`body.width` 改为 `min-width: 340px; width: 100%` |
+| `popup.js` | 删除 detach button 逻辑；`handleClaim` 直接读 `config.defaultProjectKey`，不再读 UI 输入框 |
+| `manifest.json` | 权限从 `["storage","tabs","windows"]` → `["storage","tabs"]`（windows 权限仅用于独立浮窗，已无需保留） |
+
+**背景**：项目 Key 仅需在设置页配置，不应在主界面操作时每次手动填写。独立浮窗功能用户不需要。宽度改为自适应内容宽度。
+
+#### 158. 主项目 README 补充浏览器扩展、项目 Key、完成/释放说明
+
+**时间**：2026-04-18
+
+**内容**（`README.md` + `README.en.md`）：
+- 新增「浏览器扩展」章节（位于"外部接口与邮箱池集成"之后）
+- 项目 Key：多租户隔离、填/不填的行为、成功复用路径
+- 完成 vs 释放：状态对比表、适用场景
+
+#### 157. 完善浏览器扩展 README（项目 Key 说明 + 完成/释放区别）
+
+**时间**：2026-04-18
+
+**内容**（`browser-extension/README.md`）：
+- 新增「概念说明」章节
+- 项目 Key：多租户隔离机制、填写方式、不填时的回落行为
+- 完成 vs 释放：状态机区别、适用场景对比表、简单记法
+
+#### 156. 修复插件验证码/验证链接提取 bug（API 响应层级错误）
+
+**时间**：2026-04-18
+
+**根因**：
+- `verification-code` API 实际响应结构为 `{success, code:"OK", data:{verification_code:..., verification_link:...}}`
+- `popup.js` 的 `handleGetCode` 检查并读取 `result.code`，该字段值永远是字符串 `"OK"`（状态码），不是验证码
+- `handleGetLink` 读取 `result.link`，顶层无此字段，为 `undefined`
+
+**修改**（`browser-extension/popup.js`）：
+
+| 函数 | 旧写法 | 新写法 |
+|------|--------|--------|
+| `handleGetCode` | `result.code` | `result.data.verification_code` |
+| `handleGetLink` | `result.link` | `result.data.verification_link` |
+
+#### 155. 修复插件申领邮箱核心 bug（result.data 层级错误）
+
+**时间**：2026-04-18
+
+**根因**：API 响应结构为 `{success:true, data:{email, account_id, claim_token, ...}}`，但 popup.js 在取字段时直接访问 `result.email`（顶层），导致 `undefined` → 报"服务器未返回邮箱地址"。
+
+同时 `apiRelease` / `apiComplete` 只发送 `task_id`，缺少 `account_id`、`claim_token`、`caller_id`，服务端验证必失败。
+
+**修改**（`browser-extension/popup.js`）：
+
+| 位置 | 修改内容 |
+|------|---------|
+| `handleClaim` | 从 `result.data` 取 `email`/`account_id`/`claim_token`，存入 task 对象 |
+| `apiComplete` | 签名改为接受 task 对象，body 补充 `account_id`/`claim_token`/`caller_id` |
+| `apiRelease` | 同上 |
+| `handleComplete` | 传入 `currentTask` 而非 `currentTask.taskId` |
+| `handleRelease` | 同上 |
+
+#### 154. 修復 _overwrite_account 边界条件（claimed 状态不被重置）
+
+**時間**：2026-04-18
+
+**問題**：`_overwrite_account` 原條件 `not existing.get("pool_status")` 對 `claimed` 帳號無效（'claimed' 是 truthy，條件為 False），覆蓋導入時 `add_to_pool=True` 不會重置已 claimed 的帳號。
+
+**修復**：
+
+```python
+# 修復前
+if add_to_pool and not existing.get("pool_status"):
+# 修復後
+if add_to_pool and existing.get("pool_status") != "available":
+```
+
+**文件**：`outlook_web/controllers/accounts.py`，`_overwrite_account` 函數
+
+#### 153. 診斷並修復：重導入後插件仍無法申領
+
+**時間**：2026-04-18
+
+**根因**：7 個帳號 `pool_status='claimed'` 卡住（之前測試時已申領但從未釋放/完成）。用戶重刪再導入時，這些帳號可能仍保留在 DB 中（軟刪除或未徹底清除），導致 claim 失敗。
+
+**另一個相關隱患**：我們修復的 `_overwrite_account` bug 有邊界情況：
+- `not existing.get("pool_status")` 在 `pool_status='claimed'` 時為 False（不會重置為 available）
+- 即覆蓋導入時若賬號已是 `claimed` 狀態，`add_to_pool=True` 也不會解除 claim
+
+**本次修復**：
+- SQL 重置 7 個卡住帳號：`UPDATE accounts SET pool_status='available', claimed_by=NULL, claimed_at=NULL, claim_token=NULL WHERE pool_status='claimed' AND status='active'`
+- 結果：14 個帳號全部 `available`
+- 驗證：claim-random 返回 HTTP 200 成功
+
+**建議後續**：長期方案應在 claim 時設置 `lease_expires_at`，到期後自動歸還（Pool 已有此字段，可定時任務掃描過期 claim）。
+
+#### 152. 文档同步更新（FD/TD/TDD）
+
+**时间**：2026-04-18
+
+| 文档 | 修改内容 |
+|------|---------|
+| `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md` | 本期包含新增：深色主题、420px宽度、⤢独立浮窗、错误提示优化、API Key引导 |
+| `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md` | manifest.json permissions 加入 `windows`；验收口径7更新说明 |
+| `docs/TDD/2026-04-18-浏览器扩展邮箱池快捷操作面板TDD.md` | 手工矩阵新增 TC-13（独立浮窗）、TC-14（主题切换）；验收条件更新为 TC-01~TC-14 |
+
+#### 151. 修复 pool_status 相关 bug + 邮箱池激活
+
+**时间**：2026-04-18
+
+| 修改 | 文件 | 说明 |
+|------|------|------|
+| SQL 直接激活 | 数据库 | `UPDATE accounts SET pool_status='available' WHERE status='active' AND pool_status IS NULL` — 14 个账号 |
+| 重复导入 pool_status bug | `controllers/accounts.py` | `_overwrite_account` 增加 `add_to_pool` 参数，覆盖时同步设置 `pool_status='available'` |
+| 重复导入 pool_status bug | `controllers/accounts.py` | 调用处传入 `add_to_pool=add_to_pool` |
+| 允许更新 pool_status | `repositories/accounts.py` | `update_account_credentials` 的 `allowed` 集合加入 `pool_status` |
+
+**验证**：`claim-random` API 返回 HTTP 200 + `{"success":true,"data":{"email":"AlexandraBailey3593@outlook.in",...}}`
+
+#### 150. 独立浮窗 + 错误提示修复
+
+**时间**：2026-04-18
+
+| 修改 | 文件 | 说明 |
+|------|------|------|
+| 新增 `windows` 权限 | `manifest.json` | 支持 `chrome.windows.create` |
+| 独立浮窗按钮 `⤢` | `popup.html` | 右上角 header-actions 区域 |
+| 浮窗逻辑 | `popup.js` | 点击 `⤢` → `chrome.windows.create({type:'popup', width:420, height:600})` |
+| 窗口模式检测 | `popup.js` | `?mode=window` 时隐藏 detach 按钮，避免嵌套开窗 |
+| 错误提示优化 | `popup.js` | handleClaim 先检查 `result.success===false`，优先显示 `result.message` |
+
+**遗留问题（用户需操作）：**
+- pool_enabled 仍为 `false` → 用户需在主应用「设置 → 对外 API」手动启用
+- 用户输入的 Key（`YKYbgUV...`）与数据库 Legacy Key 不匹配 → 需重新复制
+
+#### 149. Popup 尺寸 + UI 主题修复
+
+**时间**：2026-04-18
+
+| 修改 | 文件 | 说明 |
+|------|------|------|
+| 宽度 380→420px | `popup.html` | `body { width: 420px }` |
+| CSS 变量名对齐 | `popup.html` | `--text-sec` → `--text-secondary`，`--font` → `--font-sans` |
+| 变量值对齐 | `popup.html` | `--radius` 8→10px，`--radius-sm` 5→6px，`--transition` 0.22s ease |
+| 新增变量 | `popup.html` | `--clr-jade-light`、`--clr-success`、`--bg-hover`、`--bg-secondary` |
+| 深色模式 | `popup.html` | 新增 `[data-theme="dark"]` 完整变量块 |
+| 深色模式 body | `popup.html` | `color: var(--text)`、`transition: background/color` |
+| 主题切换按钮 | `popup.html` | 新增 `🌙/☀️` 按钮，`.header-actions` 包装 |
+| API Key 引导 | `popup.html` | 设置面板 API Key 下方加 `.form-hint` 提示 |
+| 主题初始化 | `popup.js` | DOMContentLoaded 读 `localStorage['ol_theme']` 设置 `data-theme` |
+| 主题切换逻辑 | `popup.js` | 点击主题按钮切换 dark/light，同步写 localStorage |
+
+#### 148. TC 验收实测 — 发现 2 个配置问题
+
+**时间**：2026-04-18
+
+| # | 问题 | 根因 | 修复动作 |
+|---|------|------|---------|
+| 1 | 扩展 API Key 校验失败（401） | 扩展里存的 Key 与服务器 Legacy Key（`test***-123`）不匹配 | 用户需在扩展设置里重填正确完整 Key |
+| 2 | Key 正确后仍无法申领（FEATURE_DISABLED） | 主应用 `external_pool_enabled = false`，邮箱池 API 未启用 | 用户需在主应用「设置 → 对外 API」开启邮箱池功能 |
+
+另：用户反馈 Popup 尺寸固定、UI 主题不跟主应用（无深色模式），待修复。
+
+#### 147. 全量回归测试（验收前）
+
+**时间**：2026-04-18  
+**命令**：`python -m unittest discover -s tests`  
+**结果**：✅ 全部通过
+
+| 指标 | 数值 |
+|------|------|
+| 总测试数 | 1197 |
+| 通过 | 1190 |
+| 失败 | 0 |
+| 错误 | 0 |
+| 跳过 | 7 |
+| 耗时 | 535.7s |
+
+**结论**：P1 修复未引入新问题，代码健康，可进行 D 层手工验收。
+
+#### 146. 代码审查结果 + P1 问题修复
+
+**时间**：2026-04-18
+
+**审查结论**（claude-sonnet-4.6）：
+
+- **P0**：无问题（CSP 合规、存储原子性、task_id 先写后发、65000ms 超时、失败后清空逻辑、optional_host_permissions 全部通过）
+- **P1 修复 2 处**：
+
+  | 问题 | 位置 | 修复方式 |
+  |------|------|---------|
+  | 错误提示被 `renderState('idle')` → `hideMessage()` 立即抹掉，用户静默回 idle 看不到错误 | `popup.js` handleComplete / handleRelease finally 块 | 将 `showError` 移到 `renderState('idle')` 之后执行 |
+  | `handleOpenLink` 未校验 URL scheme，可被恶意服务端用 `data:` / `file:` URL 攻击 | `popup.js` handleOpenLink | 添加 `new URL()` + protocol 白名单校验（仅允许 http/https） |
+
+- **P2**：无需补充
+
+#### 145. 启动代码审查子代理（claude-sonnet-4.6 审查扩展代码）
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+启动 claude-sonnet-4.6 code-review 子代理，对浏览器扩展 v0.1.0 核心文件进行审查（manifest.json / storage.js / popup.js / popup.html / README.md）。
+
+**审查重点**：
+- P0：MV3 CSP 合规、storage 写入原子性、task_id 先写后发、AbortController 65000ms、失败后清空逻辑
+- P1：7 状态机完整性、新标签打开、权限申请流程
+- P2：错误提示、历史排序
+
+**状态**：等待子代理完成，将通过寸止汇报结果。
+
+#### 144. 调研 GitHub Copilot CLI 子代理 thinking budget 支持情况
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+查阅 GitHub Copilot CLI 官方文档和网络资料，调研 `task` 子代理工具是否支持指定"思考程度"（thinking budget）。
+
+**调研结论**：
+
+`task` 工具当前**不支持**直接配置 thinking budget。可用参数仅包含 `name/prompt/description/agent_type/mode/model`，无 `thinking_budget` 等参数。
+
+**替代方案**：通过选择模型来隐式控制思考深度：
+- 深度思考 → `claude-opus-4.6`
+- 标准 → `claude-sonnet-4.6` / `gpt-5.4`
+- 快速轻量 → `gpt-5.4-mini`
+
+官方文档支持：`Ctrl+T` 切换推理过程可见性（不影响实际思考深度）。
+
+#### 143. 启动扩展代码开发子代理（gpt-5.4 执行 E-01 ~ E-07）
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+启动 gpt-5.4 子代理，依据 `browser-extension/PROMPTS_PACK.md` 中的提示词集合，逐步创建浏览器扩展 v0.1.0 全部核心文件（E-01~E-07）。
+
+**执行顺序**：E-01 → E-02 → E-03 → E-04（含 E-05 重命名）→ E-07；E-06 图标独立执行。
+
+**目标产出**：
+- `browser-extension/manifest.json`
+- `browser-extension/storage.js`
+- `browser-extension/popup.js`
+- `browser-extension/popup.html`（正式版，CSP 合规）
+- `browser-extension/popup.preview.html`（预览原型，原 popup.html 重命名）
+- `browser-extension/icons/icon16.png`、`icon48.png`、`icon128.png`
+- `browser-extension/README.md`
+
+**状态**：✅ 完成（gpt-5.4，耗时约 7.5 分钟）
+
+**执行结果**（全部成功）：
+
+| 文件 | 状态 |
+|------|------|
+| `manifest.json` | ✅ 创建，JSON 合法，通过校验 |
+| `storage.js` | ✅ 创建 |
+| `popup.js` | ✅ 创建（7 状态机 + 5 API + 完整事件处理） |
+| `popup.html` | ✅ 创建（正式版，无内联 JS，CSP 合规） |
+| `popup.preview.html` | ✅ 原 popup.html 重命名保留 |
+| `icons/icon16.png` | ✅ 合法 PNG，16×16 |
+| `icons/icon48.png` | ✅ 合法 PNG，48×48 |
+| `icons/icon128.png` | ✅ 合法 PNG，128×128 |
+| `README.md` | ✅ 创建 |
+
+#### 142. 更新 CLAUDE.md — 新增子代理模型分配规则
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+在 `CLAUDE.md` 末尾新增 `Sub-Agent Model Selection（子代理模型分配规则）` 章节，记录项目中子代理任务类型与对应模型的映射规则。
+
+**规则摘要**：
+
+| 任务类型 | 优先模型 |
+|---------|--------|
+| 探索类 | `gpt-5.4-mini` |
+| 前端 UI 设计/开发 | `claude-sonnet-4.6` 或 `gpt-5.4`（Gemini 不可用时替代） |
+| 后端探索/实现 | `claude-sonnet-4.6` 或 `gpt-5.4` |
+| 思考整合/头脑风暴/复杂设计 | `claude-opus-4.6` |
+| 其余小任务 | `gpt-5.4-mini` |
+
+#### 141. 生成浏览器扩展 E-01 ~ E-07 AI 执行提示词集合（Prompts Pack）
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+读取 FD / TD / TODO / popup.html 预览版四份文档，为浏览器扩展子项目 v0.1.0 的 7 个开发任务（E-01 ~ E-07）生成完整的自包含 AI 执行提示词集合。
+
+**涉及文档**：
+- `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md`
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+- `browser-extension/TODO.md`
+- `browser-extension/popup.html`（预览版，作为 CSS 参考）
+
+**产出**：7 个自包含提示词（E-01 manifest.json / E-02 storage.js / E-03 popup.js / E-04 popup.html 正式版 / E-05 预览版重命名 / E-06 图标生成 / E-07 README.md），通过 MCP 寸止工具输出给用户。
+
+**依赖顺序**：E-01 → E-02 → E-03 → E-04（含 E-05 重命名）→ E-07；E-06 可独立执行。
+
+#### 140. 回归测试 + 四文档联调（PRD 基准对齐）
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+**一、回归测试**：运行 141 个已有测试（test_external_pool + test_external_api + test_external_pool_e2e + test_smoke_contract）全部通过，确认 CORS 改动无破坏性。
+
+**二、文档联调发现问题（以 PRD 为基准）并全部修正**：
+
+| 编号 | 问题位置 | 问题描述 | 修复 |
+|------|----------|---------|------|
+| 联调-01 | FD §1.2 | 快捷键说明缺默认值（PRD UC-2 明确了 `Ctrl+Shift+E`） | FD 补充完整描述 |
+| 联调-02 | TDD §4.4 | 手工冒烟矩阵用 M-01~M-12，与 §6.2 TC-01~TC-12 冲突 | §4.4 统一改为 TC-01~TC-12 |
+| 联调-03 | TDD §6.2 TC-10 | 缺少 101 条历史上限验证（§4.4 M-11 有此场景） | TC-10 补充第 3/4 步 |
+| 联调-04 | TODO.md | 缺少 README.md 任务（FD §2.1 + TD §3.1 均列有此文件） | 新增 E-07 |
+
+**当前文档体系**：PRD / FD / TD / TDD 全链路已经完成联调，与 PRD 保持一致。
+
+#### 139. 创建浏览器扩展子项目 TODO 文档
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+创建 `browser-extension/TODO.md`，梳理扩展子项目 v0.1.0 的完整任务清单。
+
+**已完成（标记 ✅）**：D-01~D-05（文档体系）、B-01~B-02（主应用 CORS）、T-01（CORS 测试）
+
+**待完成（核心扩展代码）**：
+
+| 编号 | 任务 | 依赖 |
+|------|------|------|
+| E-01 | `manifest.json`（MV3）| — |
+| E-02 | `storage.js`（chrome.storage 封装）| E-01 |
+| E-03 | `popup.js`（主交互逻辑）| E-01, E-02 |
+| E-04 | `popup.html`（正式版，MV3 CSP 合规）| E-03 |
+| E-05 | 预览版改名为 `popup.preview.html` | E-04 |
+| E-06 | 图标文件（16/48/128px）| — |
+
+**手工冒烟**：TC-01~TC-12（12 条），TC-05/TC-12 为高风险点
+
+#### 138. 编写 A 层 CORS 测试代码，实施主应用 CORS 改动
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+根据 TDD §4.1/§5 编写实际测试代码并实施主应用 CORS 改动：
+
+- 新增：`requirements.txt` 追加 `flask-cors>=4.0.0`
+- 修改：`outlook_web/app.py` 在 Blueprint 注册后增加 CORS 配置（仅对 `/api/external/*`）
+- 新建：`tests/test_extension_cors.py`（A 层 CORS 测试，10 个测试方法）
+
+**CORS 配置方案**：
+
+```python
+# 仅允许 chrome-extension:// 来源访问 /api/external/* 路径
+CORS(app, resources={
+    r"/api/external/*": {
+        "origins": [re.compile(r"^chrome-extension://.*$")],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "X-API-Key"],
+        "supports_credentials": False,
+    }
+})
+```
+
+**测试结果**：10 个测试全部通过（10/10 OK，耗时 3.3s）
+
+覆盖场景：CR-01~CR-08（含 claim-random/release/complete/verification-code/verification-link 5 个端点，OPTIONS 预检，4xx 响应时 CORS 头存在，内部 API 不受影响）
+
+#### 137. 编写浏览器扩展 TDD 文档，补充 FD 关联
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+创建 TDD 文档，并同步更新 FD 增加 TDD 关联字段：
+
+- 文档路径：`docs/TDD/2026-04-18-浏览器扩展邮箱池快捷操作面板TDD.md`
+- FD 更新：增加「关联 TDD」字段
+
+**TDD 核心设计**：
+
+测试分层策略：
+
+| 层级 | 方式 | 是否 v0.1.0 必须 |
+|------|------|----------------|
+| A. 主应用 CORS（Python）| `tests/test_extension_cors.py` | ✅ 必须 |
+| B. Storage 封装（Jest）| `browser-extension/tests/storage.test.js` | ❌ 可选 |
+| C. 状态机 & 流程（Jest）| `browser-extension/tests/popup.test.js` | ❌ 可选 |
+| D. 手工冒烟（TC-01~12）| 12 条测试用例 | ✅ 必须 |
+
+关键测试矩阵数量：
+- A 层 CORS 矩阵：8 个场景（CR-01 ~ CR-08）
+- B 层 Storage：7 个场景（ST-01 ~ ST-07）
+- C 层状态机：13 个场景（SM-01 ~ SM-13）
+- D 层手工冒烟：12 条测试用例（TC-01 ~ TC-12）
+
+高风险测试点：TC-05（Popup 关闭恢复）、TC-12（权限拒绝处理），v0.1.0 前必须人工确认。
+
+**当前状态**：
+- TDD v1.0 已创建
+- 文档体系全链路完整：PRD → FD → TD → TDD
+
+#### 136. PRD-FD-TD 文档联调
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+对三个文档进行联调，发现并修正 FD 中 4 处不一致：
+
+| # | 位置 | 问题 | 修正内容 |
+|---|------|------|---------|
+| 1 | FD 2.1 文件结构 | 缺少 `storage.js` 和 `popup.preview.html` | 同步补充（与 TD 3.1 文件结构一致） |
+| 2 | FD 2.3 caller_id 注释 | 写了「可在设置中自定义」，但 PRD/FD 设置面板均无该字段 | 改为「v1 硬编码，不提供配置项」 |
+| 3 | FD 2.4 超时处理 | 描述为「若支持 wait 则依赖服务端超时，否则加兜底」逻辑不明 | 改为「始终加 65s AbortController 兜底」（与 TD 一致） |
+| 4 | FD 2.7 设置面板 | 缺少「保存时触发 chrome.permissions.request」步骤 | 补充完整权限申请流程（包含用户拒绝处理） |
+
+**三文档结论**：
+
+- PRD：产品需求层面无需变更（权限申请属实现细节，PRD 不展开）
+- FD：4 处已修正，与 TD 设计对齐
+- TD：无需变更，逻辑原本正确
+
+**当前状态**：PRD → FD → TD 三文档已联调完毕，描述一致
+
+#### 135. 创建浏览器扩展 TD 文档，恢复 FD 关联
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+用户要求编写 TD 文档，深入分析技术难点。执行以下操作：
+
+1. 恢复 `FD` 文档中「关联 TD」字段（此前条目 134 删除了该字段）
+2. 创建 TD 文档：`docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+
+**TD 核心内容 — 9 大技术难点**：
+
+| 难点 | 核心问题 | 选定方案 |
+|------|---------|---------|
+| 1. 动态地址 vs host_permissions | MV3 要求静态声明权限，用户自填地址无法预知 | `optional_host_permissions: <all_urls>` + `chrome.permissions.request` 在保存时动态申请 |
+| 2. Popup 生命周期 vs wait=60 | 关闭 Popup 时 fetch 被中断 | UI 提示「勿关闭」+ AbortController 兜底 + 重新打开可重试 |
+| 3. Manifest V3 CSP | 禁止内联 JS，预览版无法直接用 | 正式版 popup.html 只含 DOM，全部 JS 移入 popup.js；预览版改名 popup.preview.html |
+| 4. Extension ID 不稳定 | 重装后 ID 变化导致 CORS 白名单失效 | 服务端匹配 `chrome-extension://` 前缀（正则），不写死 ID |
+| 5. 主应用 CORS 改动 | flask-cors 需支持 chrome-extension:// 来源 | 视现状选 flask-cors 正则 origins 或手动 after_request headers |
+| 6. storage 原子性 | 多次异步写入顺序问题 | 封装 Storage 助手，所有操作 async/await 串行 |
+| 7. task_id 可靠生成 | 内存变量在 Popup 关闭后丢失 | 生成后立即写 storage，API 请求在 storage 写完之后发起 |
+| 8. 错误类型区分 | CORS 拦截与网络不通在前端表现一致 | 分层提示，引导用户检查配置 |
+| 9. 图标资源 | 需 3 种尺寸 PNG | SVG 设计后转换，或代码生成 |
+
+**额外设计产出**：
+- 完整 `manifest.json` 设计（含 commands 快捷键、permissions、optional_host_permissions）
+- `popup.js` 模块结构（5 层：常量、UI 渲染、Storage、API、事件处理器 + init）
+- 主应用 CORS 3 种改动场景（全局 flask-cors / Blueprint after_request / 无现有配置）
+
+**当前状态**：
+- TD v1.0 已创建，文档体系完整（PRD → FD → TD）
+- 下一步：实际编写扩展代码 or 先做主应用 CORS 改动
+
+#### 134. 更新浏览器扩展 FD —— 移除 TD 关联
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+用户明确本项目**不单独出 TD 文档**，设计与实现细节直接在 FD 内展开。
+
+- 更新 `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md` 元数据头：
+  - 删除「关联 TD」引用行
+  - 修改「当前范围」描述为「含必要实现细节，不另出 TD」
+
+**当前状态**：
+- FD 已更新，无 TD 关联
+- 下一步待确认：是否直接开始编写实际扩展代码
+
+#### 133. 编写浏览器扩展 FD 文档
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+用户确认 UI 预览（国风配色版）效果满意，进入 FD 阶段。创建功能设计文档：
+
+- 文档路径：`docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md`
+- 文档版本：v1.0
+- 关联 PRD：`docs/PRD/2026-04-18-浏览器扩展邮箱池快捷操作面板PRD.md`
+
+**FD 核心内容**：
+
+1. **功能定义**：本期包含扩展骨架、状态机、申领/获取/完成/释放全流程、历史记录、主应用 CORS 改动；明确排除 DOM 注入、Background SW 等
+2. **行为设计**：
+   - 扩展文件结构（manifest.json / popup.html / popup.js / icons/）
+   - Popup 7 种状态（idle / claiming / claimed / fetching / result_code / result_link / settings）
+   - 各流程详细步骤（申领 → 验证码 → 验证链接 → 完成/释放）
+   - `task_id` 使用 `crypto.randomUUID()` 生成，`caller_id` 固定为 `"browser-extension"`
+3. **接口契约**：主应用 CORS 改动（`chrome-extension://` 前缀匹配）+ 5 个外部 API 调用规范
+4. **数据语义**：`chrome.storage.local` 完整数据结构（config / currentTask / history）
+5. **兼容与边界**：扩展与主应用解耦、Extension ID 变更应对方案、popup.html 预览版定位说明
+6. **验收口径**：10 条可验证的验收标准
+
+**当前状态**：
+- FD v1.0 已创建，等待进一步实现阶段决策
+
+#### 131. 创建浏览器扩展 PRD 文档
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+根据设计讨论结果（条目 130），编写浏览器扩展功能 PRD：
+
+- 文档路径：`docs/PRD/2026-04-18-浏览器扩展邮箱池快捷操作面板PRD.md`
+- 文档版本：v1.0
+- 定位：独立伴生子项目，不依附主应用版本号
+
+**PRD 核心内容**：
+- 背景：Web 界面操作割裂，注册场景需频繁切换页面
+- 目标：快捷键唤起 Popup，一键申领邮箱 + 获取验证码/链接
+- Use Case：UC-1（配置）~ UC-8（历史记录）共 8 个用例
+- 非目标：明确排除 DOM 自动识别、Content Script 注入等复杂能力
+- 服务端关联改动：主应用需补充 `chrome-extension://` CORS 支持
+
+**当前状态**：
+- PRD v1.0 已创建，处于需求讨论阶段
+
+#### 132. 创建浏览器扩展目录与 UI 预览文件
+
+**时间**：2026-04-18
+
+**本次操作**：
+
+1. 新建独立目录：`browser-extension/`
+2. 创建交互式 UI 预览文件：`browser-extension/popup.html`
+
+**popup.html 功能说明**：
+- 可直接在浏览器中打开进行 UI 预览（无需安装扩展）
+- 包含所有状态的完整交互演示：
+  - 「无任务」状态 → 申领邮箱 → loading 动画 → 进入「申领中」状态
+  - 「申领中」状态 → 获取验证码 / 获取验证链接 → 结果展示框（一键复制）
+  - 完成 / 释放邮箱 → 自动返回「无任务」状态
+  - 设置面板（服务器地址、API Key、默认项目Key）
+  - 历史记录区（可折叠展开）
+- 底部预览切换栏：无任务 / 申领中 / 有验证码 / 有链接 / 设置
+
+**当前状态**：
+- UI 预览文件已完成，可供前端效果评审
+
+
+
+**时间**：2026-04-18
+
+**第一轮讨论（初始方案）**：
+
+针对「Chrome/Edge 浏览器插件」方向进行可行性评估，初始设想包含自动 DOM 识别和自动填充能力。
+
+**第二轮讨论（方案收敛）**：
+
+经用户明确后，**不做 DOM 自动识别 / 自动填充**，定位为轻量快捷操作面板。
+
+**第三轮讨论（设计定稿）**：
+
+确认采用**方案 A：极简 Popup**，完整设计如下：
+
+**触发方式**：
+- 快捷键唤起 Popup（如 `Ctrl+Shift+E`），弹出小窗
+
+**核心操作流（极简）**：
+1. 点「申领邮箱」→ 从邮箱池申领一个邮箱，显示地址并一键复制
+2. 用户手动将邮箱地址填入注册页面
+3. 点「获取验证码」→ 拉取该邮箱最新验证码，一键复制
+4. 可选：点「释放邮箱」→ 归还邮箱池
+
+**本地历史记录**（关键特性）：
+- 即使邮箱已释放，申领记录（邮箱地址 + 最新验证码）**保留在插件本地存储中**
+- 用户可随时翻阅历史，方便复用
+
+**插件架构（定稿）**：
+- 仅 `Popup` 页面 + `chrome.storage.local`，**无 Content Script、无 Background SW**
+- 快捷键通过 `manifest.json` `commands` 配置
+- 分区：① 服务配置（服务器地址 + API Key）② 当前任务（申领/验证码/释放）③ 历史记录
+
+**对接接口**：
+| 操作 | 接口 |
+|---|---|
+| 申领邮箱 | `POST /api/external/pool/claim-random` |
+| 获取最新验证码 | `GET /api/external/verification-code` |
+| 释放邮箱 | `POST /api/external/pool/claim-release` |
+| 完成邮箱 | `POST /api/external/pool/claim-complete` |
+
+**后端改动**：
+- 补充 CORS 支持，允许 `chrome-extension://` 来源
+
+**存放位置**：独立子目录 `browser-extension/`
+
+**当前状态**：
+- 设计讨论已完成，方案定稿，**尚未决定是否开始实施**
+
+---
+
 ## 2026-04-16
 
 ### 操作记录
