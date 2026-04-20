@@ -1118,6 +1118,33 @@
 
 - 下一步将把本地候选提交推送到 `main`，并核对新一轮 GitHub Actions 是否转绿。
 
+#### 206. main 已推送 CI 修复提交，四条主链路工作流全部转绿
+
+**时间**：2026-04-20
+
+**本次执行结果**：
+
+1. 推送结果：
+   - 首次 `git push origin main` 遇到一次传输层异常：`curl 52 Empty reply from server`
+   - 经远端 SHA 核对后确认未成功推进，再次重试推送后成功
+   - 远端 `main` 已更新到：`3e9a321 docs: 记录 main 分支 CI 修复策略`
+
+2. 本次 `3e9a321` 触发的 GitHub Actions：
+   - `Code Quality`（run `#93` / id `24649680553`）✅ success
+   - `Python Tests`（run `#95` / id `24649680543`）✅ success
+   - `SonarCloud Scan`（run `#126` / id `24649680557`）✅ success
+   - `Build and Push Docker Image`（run `#180` / id `24649680549`）✅ success
+
+3. 语义结论：
+   - 本次没有重发已公开的 `v2.1.0` tag / Release
+   - 但 `main` 分支上的 CI / CD 主链路已经恢复健康
+   - 因为 `Build and Push Docker Image` on `main` 已成功，后续 `latest/main` 镜像链路已恢复
+
+**当前状态**：
+
+- `v2.1.0` Release 保持原状，不改 tag、不改 Release 页面
+- `main` 分支 post-release 修复已完成，相关文档与 `WORKSPACE.md` 已同步到真实状态
+
 ---
 
 ## 2026-04-18
