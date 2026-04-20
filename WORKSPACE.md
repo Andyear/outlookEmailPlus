@@ -898,6 +898,31 @@
    - 仅更新工作记录并做**本地 commit**
    - 不执行 `git push`
 
+#### 199. 本地 main 工作树脏改动复核 — 当前观察到的是注释补充，不是逻辑变更
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在准备发版前，用户要求重新判断本地 `main` 工作树里的未提交内容是否可以纳入后续管理
+
+**复核结果**：
+
+1. 当前 `main` 工作树仍显示脏文件：
+   - `outlook_web/controllers/emails.py`
+   - `outlook_web/repositories/overview.py`
+   - `outlook_web/services/external_api.py`
+   - `outlook_web/services/temp_mail_service.py`
+   - `outlook_web/services/verification_extract_log.py`
+   - `browser-extension.zip`（未跟踪）
+2. 对 5 个 tracked 文件逐个 `git diff` 后确认：
+   - 当前差异均为**中文解释性注释补充**
+   - 未看到业务逻辑、控制流、字段、SQL、返回结构或错误语义变化
+3. 因此当前判断是：
+   - 这批 tracked 脏改动更接近“本地注释增强”
+   - 不是新的功能/修复逻辑改动
+   - 但它们依然会让 `main` 工作树处于“不干净”状态，因此按 `RELEASE.md` 口径，正式发版前仍需显式处理
+
 ---
 
 ## 2026-04-18
