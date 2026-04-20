@@ -324,14 +324,17 @@ def record_external_api_consumer_usage(
     db.execute(
         """
         INSERT INTO external_api_consumer_usage_daily (
-            consumer_key, consumer_name, usage_date, endpoint,
-            total_count, success_count, error_count, last_status, last_used_at, updated_at
+            consumer_key, consumer_name, caller_id, usage_date, date, endpoint,
+            total_count, call_count, success_count, error_count, last_status, last_used_at, updated_at
         )
-        VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(consumer_key, usage_date, endpoint)
         DO UPDATE SET
             consumer_name = excluded.consumer_name,
+            caller_id = excluded.caller_id,
+            date = excluded.date,
             total_count = external_api_consumer_usage_daily.total_count + 1,
+            call_count = external_api_consumer_usage_daily.call_count + 1,
             success_count = external_api_consumer_usage_daily.success_count + excluded.success_count,
             error_count = external_api_consumer_usage_daily.error_count + excluded.error_count,
             last_status = excluded.last_status,
@@ -341,6 +344,8 @@ def record_external_api_consumer_usage(
         (
             consumer_key,
             str(consumer_name or "")[:120],
+            str(consumer_name or consumer_key or "")[:120],
+            usage_date,
             usage_date,
             str(endpoint or "")[:200],
             success_inc,

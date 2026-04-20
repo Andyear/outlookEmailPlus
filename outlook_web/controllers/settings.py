@@ -333,6 +333,21 @@ def api_get_settings() -> Any:
 
 
 @login_required
+def api_get_external_api_key_plaintext() -> Any:
+    api_key_value = settings_repo.get_external_api_key()
+    if not api_key_value:
+        return _json_error(
+            "EXTERNAL_API_KEY_NOT_SET",
+            "当前未设置对外 API Key",
+            status=404,
+            message_en="External API key is not configured",
+        )
+
+    log_audit("copy_external_api_key", "settings", None, "复制对外 API Key 明文")
+    return jsonify({"success": True, "api_key": api_key_value})
+
+
+@login_required
 def api_update_settings() -> Any:
     """更新设置"""
     # 延迟导入避免循环依赖

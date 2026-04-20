@@ -121,8 +121,10 @@ browser-extension/
 本扩展调用 OutlookMail Plus 的**外部 API**（`/api/external/*`），需要：
 
 1. 主应用已启用 CORS（`flask-cors`，已配置在 `outlook_web/app.py`）
-2. 已在主应用设置中创建 API Key
-3. 网络可达主应用服务地址
+2. 已在主应用设置中创建 API Key，并通过主应用“API 安全”里的**复制**按钮获取真实明文 Key
+3. 已在主应用开启 **external pool**
+4. 如果使用的是“对外 API 多 Key”，该 Key 还需要具备 `pool_access`
+5. 网络可达主应用服务地址
 
 ## 权限说明
 
@@ -137,6 +139,9 @@ browser-extension/
 | 问题 | 原因 | 解决 |
 |------|------|------|
 | "请先在设置中配置" | 未配置服务器地址或 API Key | 点击 ⚙ 填写配置 |
+| "API Key 缺失或无效" | 配置了错误 Key，或复制到了旧版本页面里的脱敏展示值 | 在主应用“API 安全”重新点击复制，获取真实明文 Key 后再保存 |
+| "功能 external_pool 当前未启用" | 主应用未开启 external pool | 到主应用“API 安全”里开启 **启用 external pool 端点** |
+| "当前 API Key 无权访问 external pool" | 当前多 Key 没有 `pool_access` | 给该多 Key 开启 `pool_access`，或改用 legacy 单 Key |
 | "无法连接服务器" | 服务器地址错误或网络不通 | 检查地址、网络、CORS 配置 |
 | "等待超时" | 60s 内未收到新邮件 | 确认邮件已发送，重试 |
 | 权限弹窗被拒绝 | 浏览器权限被拒绝 | 重新保存设置并允许权限 |

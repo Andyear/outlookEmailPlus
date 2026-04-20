@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import re
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import Any
 
 from outlook_web.repositories import temp_emails as temp_emails_repo
+from outlook_web.services.verification_extract_log import (
+    encode_temp_mail_log_account_id,
+    resolve_extract_log_outcome,
+    write_verification_extract_log,
+)
 from outlook_web.services.temp_mail_provider_custom import TempMailProviderReadError
 from outlook_web.services.temp_mail_provider_factory import (
     TempMailProviderFactoryError,
@@ -582,59 +588,91 @@ class TempMailService:
         code_length: str | None = None,
         code_source: str = "all",
     ) -> dict[str, Any]:
+        started_at = time.time()
         mailbox = self._get_mailbox_descriptor(email_or_mailbox)
+        record = dict(mailbox.get("record") or {})
+        log_account_id = encode_temp_mail_log_account_id(record.get("id"))
         email_addr = str(mailbox.get("email") or "")
-        messages = self.list_messages(mailbox, sync_remote=True)
-        if not messages:
-            raise TempMailError("TEMP_EMAIL_MESSAGE_NOT_FOUND", "未找到邮件", status=404)
-        latest = messages[0]
-        detail = self.get_message_detail(mailbox, latest["id"])
-        extracted = extract_verification_info_with_options(
-            {
-                "subject": detail.get("subject") or "",
-                "body": detail.get("content") or "",
-                "body_html": detail.get("html_content") or "",
-                "body_preview": latest.get("content_preview") or "",
-            },
-            code_regex=code_regex,
-            code_length=code_length,
-            code_source=code_source,
-            enforce_mutual_exclusion=False,
-        )
-        ai_config = get_verification_ai_runtime_config()
-        if ai_config.get("enabled") and not is_verification_ai_config_complete(ai_config):
-            raise TempMailError(
-                "VERIFICATION_AI_CONFIG_INCOMPLETE",
-                "验证码 AI 已开启，请完整填写 Base URL、API Key、模型 ID",
-                status=400,
+        extracted: dict[str, Any] | None = None
+        error_code: str | None = None
+        try:
+            messages = self.list_messages(mailbox, sync_remote=True)
+            if not messages:
+                raise TempMailError("TEMP_EMAIL_MESSAGE_NOT_FOUND", "未找到邮件", status=404)
+            latest = messages[0]
+            detail = self.get_message_detail(mailbox, latest["id"])
+            extracted = extract_verification_info_with_options(
+                {
+                    "subject": detail.get("subject") or "",
+                    "body": detail.get("content") or "",
+                    "body_html": detail.get("html_content") or "",
+                    "body_preview": latest.get("content_preview") or "",
+                },
+                code_regex=code_regex,
+                code_length=code_length,
+                code_source=code_source,
+                enforce_mutual_exclusion=False,
             )
-        extracted = enhance_verification_with_ai_fallback(
-            email={
-                "subject": detail.get("subject") or "",
-                "body": detail.get("content") or "",
-                "body_html": detail.get("html_content") or "",
-                "body_preview": latest.get("content_preview") or "",
-            },
-            extracted=extracted,
-            code_regex=code_regex,
-            code_length=code_length,
-            code_source=code_source,
-            enforce_mutual_exclusion=False,
-        )
-        # 与外部 API 保持一致：应用置信度门控
-        extracted = apply_confidence_gate(extracted, enforce_mutual_exclusion=False)
-        extracted["matched_email_id"] = latest["id"]
-        extracted["from"] = detail.get("from_address") or latest.get("from_address") or ""
-        extracted["subject"] = detail.get("subject") or latest.get("subject") or ""
-        extracted["received_at"] = detail.get("created_at") or latest.get("created_at") or ""
-        if not extracted.get("verification_code") and not extracted.get("verification_link"):
-            raise TempMailError(
-                "VERIFICATION_CODE_NOT_FOUND",
-                "未找到验证码或验证链接",
-                status=404,
-                data=extracted,
+            ai_config = get_verification_ai_runtime_config()
+            if ai_config.get("enabled") and not is_verification_ai_config_complete(ai_config):
+                raise TempMailError(
+                    "VERIFICATION_AI_CONFIG_INCOMPLETE",
+                    "验证码 AI 已开启，请完整填写 Base URL、API Key、模型 ID",
+                    status=400,
+                )
+            extracted = enhance_verification_with_ai_fallback(
+                email={
+                    "subject": detail.get("subject") or "",
+                    "body": detail.get("content") or "",
+                    "body_html": detail.get("html_content") or "",
+                    "body_preview": latest.get("content_preview") or "",
+                },
+                extracted=extracted,
+                code_regex=code_regex,
+                code_length=code_length,
+                code_source=code_source,
+                enforce_mutual_exclusion=False,
             )
-        return extracted
+            # 与外部 API 保持一致：应用置信度门控
+            extracted = apply_confidence_gate(extracted, enforce_mutual_exclusion=False)
+            extracted["matched_email_id"] = latest["id"]
+            extracted["from"] = detail.get("from_address") or latest.get("from_address") or ""
+            extracted["subject"] = detail.get("subject") or latest.get("subject") or ""
+            extracted["received_at"] = detail.get("created_at") or latest.get("created_at") or ""
+            extracted["email"] = email_addr
+            if not extracted.get("verification_code") and not extracted.get("verification_link"):
+                raise TempMailError(
+                    "VERIFICATION_CODE_NOT_FOUND",
+                    "未找到验证码或验证链接",
+                    status=404,
+                    data=extracted,
+                )
+            return extracted
+        except TempMailError as exc:
+            error_code = exc.code
+            raise
+        except Exception as exc:
+            error_code = type(exc).__name__.upper()
+            raise
+        finally:
+            result_type, code_found = resolve_extract_log_outcome(extracted)
+            write_verification_extract_log(
+                account_id=log_account_id,
+                channel=(
+                    "ai_fallback"
+                    if extracted
+                    and extracted.get("_used_ai")
+                    and (extracted.get("verification_code") or extracted.get("verification_link"))
+                    else "temp_mail"
+                ),
+                started_at=started_at,
+                finished_at=time.time(),
+                result_type=result_type,
+                code_found=code_found,
+                used_ai=bool(extracted and extracted.get("_used_ai")),
+                error_code=error_code,
+                trace_id=None,
+            )
 
 
 _service: TempMailService | None = None

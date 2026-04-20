@@ -240,7 +240,7 @@ def fetch_emails_and_detail_for_channel(
         if not legacy_list.get("success"):
             return {
                 "success": False,
-                "error": result.get("error") or legacy_list.get("error"),
+                "error": legacy_list.get("error") or result.get("error"),
                 "channel": normalized,
             }
 
@@ -363,8 +363,10 @@ def extract_verification_for_outlook(
     precheck_obj = locals().get("precheck")
     new_refresh_token = str((precheck_obj or {}).get("new_refresh_token") or "")
     verification_attempted = False
+    last_log_channel = "unknown"
 
     for channel in channel_plan:
+        last_log_channel = channel or last_log_channel
         channel_result = fetch_emails_and_detail_for_channel(
             account=account,
             channel=channel,
@@ -457,6 +459,12 @@ def extract_verification_for_outlook(
                 "method": _get_channel_display_name(channel),
             }
         )
+        extracted["_log_channel"] = (
+            "ai_fallback"
+            if extracted.get("_used_ai") and _is_extraction_success(extracted, expected_field)
+            else channel
+        )
+        extracted["_log_used_ai"] = bool(extracted.get("_used_ai"))
         last_extracted = extracted
 
         if _is_extraction_success(extracted, expected_field):
@@ -471,6 +479,8 @@ def extract_verification_for_outlook(
                 "success": True,
                 "data": extracted,
                 "channel_used": channel,
+                "_log_channel": extracted.get("_log_channel") or channel,
+                "_log_used_ai": bool(extracted.get("_used_ai")),
                 "new_refresh_token": new_refresh_token,
             }
 
@@ -482,6 +492,8 @@ def extract_verification_for_outlook(
             "error_status": 401,
             "upstream_errors": upstream_errors,
             "graph_auth_expired": graph_auth_expired,
+            "_log_channel": last_log_channel,
+            "_log_used_ai": False,
         }
 
     if last_extracted or verification_attempted:
@@ -492,6 +504,8 @@ def extract_verification_for_outlook(
             "error_status": 404,
             "upstream_errors": upstream_errors,
             "new_refresh_token": new_refresh_token,
+            "_log_channel": (last_extracted or {}).get("_log_channel") or last_log_channel,
+            "_log_used_ai": bool((last_extracted or {}).get("_used_ai")),
         }
 
     return {
@@ -501,4 +515,6 @@ def extract_verification_for_outlook(
         "error_status": 404,
         "upstream_errors": upstream_errors,
         "new_refresh_token": new_refresh_token,
+        "_log_channel": last_log_channel,
+        "_log_used_ai": False,
     }

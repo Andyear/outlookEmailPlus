@@ -43,6 +43,11 @@ def create_blueprint() -> Blueprint:
         view_func=settings_controller.api_sync_cf_worker_domains,
         methods=["POST"],
     )
+    bp.add_url_rule(
+        "/api/settings/external-api-key/plaintext",
+        view_func=settings_controller.api_get_external_api_key_plaintext,
+        methods=["GET"],
+    )
     bp.add_url_rule("/api/settings", view_func=settings_controller.api_get_settings, methods=["GET"])
     bp.add_url_rule(
         "/api/settings",

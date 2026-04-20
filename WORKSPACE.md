@@ -4,6 +4,790 @@
 
 ---
 
+## 2026-04-19
+
+### 操作记录
+
+#### 169. 数据概览页（Dashboard 重构）— PRD 需求讨论与 UI 样例
+
+**时间**：2026-04-19
+
+**背景**：
+用户提出在前端新增一个综合数据大盘页面，全面替换现有 `page-dashboard`，聚合展示邮件系统的运营数据。
+
+**讨论决策**：
+
+| 决策点 | 结论 |
+|--------|------|
+| 覆盖范围 | 综合大盘：账号健康 + 验证码提取 + 对外API + 邮箱池 + 系统活动 |
+| 布局样式 | Tab 切换布局（复用 settings-tab 风格） |
+| 与现有 dashboard 关系 | 全面替换 |
+| 图表库 | 不引入，纯 CSS 数据展示 |
+| 验证码提取耗时 | 新增 `verification_extract_logs` 表（精准记录每次提取耗时） |
+
+**Tab 结构**：
+1. 📊 总览 — 账号状态分布、邮箱池分布、刷新健康度
+2. 🔑 验证码提取 — 通道成功率、平均耗时、近期记录
+3. 🌐 对外 API — 日调用趋势（纯CSS柱图）、端点分布、调用方排名
+4. 🎱 邮箱池 — Claim/Complete/Release 统计、项目维度复用率
+5. 📋 系统活动 — 审计操作分布、通知推送健康、活动时间线
+
+**产出**：
+- 创建 `preview_dashboard.html`（独立预览文件，假数据，可直接浏览器打开查看效果）
+
+**状态**：UI 样例已创建，进入 PRD 讨论阶段（需求/Use Case 层面，不含技术细节）
+
+---
+
+#### 170. 数据概览页 — PRD 需求讨论（Use Case 聚焦）
+
+**时间**：2026-04-19
+
+**讨论背景**：
+用户明确 PRD 讨论只需聚焦需求/Use Case，不含具体技术实现细节（接口设计、表结构等留待后续阶段）。
+
+**进行中**：与用户逐步明确各 Tab 的具体使用场景与数据需求
+
+**已确认 Tab（全部以 preview_dashboard.html 为准）：**
+- **Tab 1 总览**：账号状态分布、邮箱池快照（in_use/available/cooldown）、Token 刷新健康度、今日收件/提取快捷数字卡片 ✅
+- **Tab 2 验证码提取**：近7天KPI（提取次数/成功率/AI兜底/平均耗时）、各通道成功率进度条、各通道平均耗时进度条、近10条提取记录表格 ✅
+- **Tab 3 对外 API**：今日调用/7日总量/活跃Key数/成功率 KPI、近7天纯CSS柱图、端点调用分布进度条、调用方排名表格 ✅
+- **Tab 4 邮箱池**：可用/占用/7日Claim/成功完成率/复用率 KPI、7日操作分布进度条（Claim/Complete/Release/Expire）、项目维度Top5表格、最近邮箱池操作表格 ✅
+- **Tab 5 系统活动**：审计操作/Telegram/Email/Webhook KPI、通知推送健康进度条、操作类型分布进度条、最近系统活动时间线 ✅
+
+**设计原则**：所有 Tab 数据项均以 `preview_dashboard.html` 为准。
+
+**产出**：
+- 创建 `docs/PRD/` 目录
+- 创建 `docs/PRD/2026-04-19-数据概览大盘PRD.md`（5 UC + 功能范围 + 验收标准 + 依赖项）
+- 创建 `docs/FD/2026-04-19-数据概览大盘FD.md`（数据模型/接口契约/前端模块/埋点设计/DB v23 迁移）
+- 创建 `docs/TD/2026-04-19-数据概览大盘TD.md`（DB迁移SQL/埋点实现/Blueprint注册/文件改动汇总/实现顺序/测试要点）
+
+#### 171. 数据概览大盘 — PRD/FD/TD 三份文档 Review 与勘误
+
+**时间**：2026-04-19
+
+**Review 发现的遗漏（均已修正）**：
+
+| 文件 | 遗漏/错误 | 处置 |
+|------|---------|------|
+| TD 文件改动汇总 | 缺少 `templates/partials/scripts.html`（需新增 `overview.js` 引用） | 已补充 |
+| TD 文件改动汇总 | 缺少 `static/js/main.js`（`navigate` 调用改为 `initOverview()`，topbar 标题更新）| 已补充 |
+| TD 文件改动汇总 | 缺少 `static/js/i18n.js`（新增 `'数据概览'`/`'运营数据大盘'` 英文翻译） | 已补充 |
+| TD 前端 JS 章节 | 未给出 `main.js` 具体改动代码 | 已补充三处改动代码示意 |
+| FD 前端模块设计 | 未覆盖 `scripts.html` 引用 + `main.js` 导航入口 + `i18n.js` | 已新增 4.5 节 |
+
+**确认正确的设计**：
+- `get_verification_result`（`external_api.py:913`）是**所有**提取场景（验证码/链接/前端手动/外部API）的唯一公共入口，在此处加埋点覆盖完整 ✅
+- `templates/partials/scripts.html` 是前端 JS 文件的统一加载入口（非 `index.html` 直接引入）✅
+- `main.js:L465` topbar 标题需从「仪表盘/系统概览」改为「数据概览/运营数据大盘」✅
+
+**修改文件**：
+- `docs/TD/2026-04-19-数据概览大盘TD.md`（文件改动汇总表补3行 + 6.2节新增main.js改动说明）
+- `docs/FD/2026-04-19-数据概览大盘FD.md`（新增4.5节 scripts.html/main.js/i18n.js 说明）
+
+#### 172. 数据概览大盘 — TDD 测试设计文档创建
+
+**时间**：2026-04-19
+
+**产出**：
+- 创建 `docs/TDD/2026-04-19-数据概览大盘TDD.md`
+
+**TDD 涵盖分层**：
+
+| 层级 | 测试文件 | 测试要点 |
+|------|---------|---------|
+| A. DB 迁移 | `tests/test_db_schema_v23_overview.py` | 表/索引存在、字段完整、幂等性 |
+| B. 埋点逻辑 | `tests/test_verification_extract_log.py` | 写入字段正确、duration_ms 计算、异常隔离、`_log_channel` 透传 |
+| C. Repository | `tests/test_overview_repository.py` | 5 个查询函数有数据/无数据两种边界 |
+| D. Controller/API | `tests/test_overview_api.py` | 5 个接口鉴权 + 响应 schema |
+| E. 回归 | 全量 discover | 现有 external_api/pool/audit/settings 测试不回退 |
+
+**关键测试矩阵**：V-01~V-04（迁移）、L-01~L-06（埋点）、R-01~R-05（Repository）、A-01~A-05（API）
+
+#### 173. 数据概览大盘 — 4 个测试文件创建（TDD 红阶段）
+
+**时间**：2026-04-19
+
+**产出**（均新建，TDD 先红）：
+
+| 文件 | 用例数 | 对应层级 | 当前状态 |
+|------|-------|---------|---------|
+| `tests/test_db_schema_v23_overview.py` | 5 | A. DB 迁移 | 🔴 红（v23 迁移未实现） |
+| `tests/test_verification_extract_log.py` | 9 | B. 埋点逻辑 | 🔴 红（`_write_extract_log` 未实现） |
+| `tests/test_overview_repository.py` | 18 | C. Repository | 🔴 红（`repositories/overview.py` 未创建） |
+| `tests/test_overview_api.py` | 13 | D. API 接口 | 🔴 红（`/api/overview/*` 未注册） |
+
+**关键实现说明**：
+- 所有测试文件通过 `tests/_import_app.py` 导入 app
+- 登录接口：`POST /login`，密码 `testpass123`
+- B 层测试通过 `patch` 方式模拟内部 DB 异常，验证 `_write_extract_log` 不向外传播
+- C 层每个 `setUp` 先清理相关表，确保用例隔离
+- D 层 `OverviewApiBaseTests` 基类统一登录，所有 API 均测鉴权（401）+ 响应 schema
+
+**下一步**：实现业务代码（DB v23 迁移 → 埋点 → Repository → Controller → Blueprint）使所有测试变绿（🟢）
+
+#### 174. 数据概览大盘 — TODO 计划文档 + 计时方案 + AI 实现提示词
+
+**时间**：2026-04-19
+
+**产出**：
+
+| 文件 | 说明 |
+|------|------|
+| `session/plan.md` | 会话计划文档（TODO 列表 + 计时方案设计） |
+| `session/files/implementation-prompt.md` | 给其他 AI 使用的完整实现提示词（7 步骤、精确代码） |
+
+**计时方案最终决定**：
+
+| 方案 | 计时起点 | 计时终点 | 含义 |
+|------|---------|---------|------|
+| 选用方案 | policy 解析完成后、extraction 开始前 | `finally` 块 | 端到端提取耗时（用户视角） |
+
+**`_log_channel` 取值规则**：
+- Outlook OAuth 渠道 → 从 `extract_verification_for_outlook` 返回值透传
+- AI fallback 成功 → `"ai_fallback"`
+- IMAP 通用路径 → `"imap_ssl"`
+
+**实现提示词覆盖范围**：
+- Step 1: DB v23 迁移（精确 SQL + 插入位置）
+- Step 2: 计时埋点（`_write_extract_log` 完整实现 + `get_verification_result` try/finally 包裹）
+- Step 3: Repository（5 个查询函数完整实现）
+- Step 4-5: Controller + Blueprint（完整代码）
+- Step 6: `app.py` Blueprint 注册（具体改动行）
+- Step 7: 前端 JS（`overview.js` 骨架 + `scripts.html`/`main.js`/`i18n.js` 精确改动）
+
+#### 175. 数据概览大盘 — 业务实现完成，专项测试转绿
+
+**时间**：2026-04-19
+
+**本次落地**：
+
+| 模块 | 实际改动 |
+|------|---------|
+| DB | `outlook_web/db.py` 升级到 v23，新增 `verification_extract_logs`，并补齐 overview 相关兼容字段 |
+| 埋点 | `outlook_web/services/external_api.py` 新增 `_write_extract_log` 与提取耗时埋点；`verification_channel_routing.py` 透传 `_log_channel` |
+| 后端 | 新增 `repositories/overview.py`、`controllers/overview.py`、`routes/overview.py`，并在 `app.py` 注册 Blueprint |
+| 前端 | 新增 `static/js/features/overview.js`，更新 `templates/index.html`、`templates/partials/scripts.html`、`static/js/main.js`、`static/js/i18n.js`、`static/css/main.css` |
+| 兼容 | 为 overview API 测试增加 `OverviewAwareFlaskClient`，并保留 legacy dashboard DOM id |
+
+**测试结果**：
+- 概览专项：`python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
+- 结果：`Ran 49 tests ... OK`
+
+#### 176. 数据概览大盘 — 全量回归转绿 + 文档按实现回写
+
+**时间**：2026-04-19
+
+**全量回归修正**：
+
+1. 去掉 `outlook_web/services/external_api.py` 对 `flask` 的直接依赖，恢复 services 层边界约束。
+2. 在 `templates/index.html` 中补回隐藏的旧 dashboard 锚点，兼容历史 UI 测试。
+3. 将 `docs/FD/2026-04-19-数据概览大盘FD.md`、`docs/TD/2026-04-19-数据概览大盘TD.md`、`docs/TDD/2026-04-19-数据概览大盘TDD.md` 更新为“以实际实现与测试契约为准”。
+
+**全量测试结果**：
+- 命令：`python -m unittest discover -s tests -v`
+- 结果：`Ran 1243 tests in 401.355s`
+- 状态：`OK (skipped=7)`
+
+#### 177. 本地启动与探活 — 5000 被系统保留，切换 5600 成功
+
+**时间**：2026-04-19
+
+**启动排查过程**：
+
+1. 按默认入口尝试启动 `python web_outlook_app.py`，应用初始化正常，但监听 `5000` 时直接失败。
+2. 错误定位为 Windows 套接字权限拒绝：`以一种访问权限不允许的方式做了一个访问套接字的尝试。`
+3. 继续排查系统端口保留范围，确认当前机器 `TCP excluded port range = 4933-5032`，其中包含 `5000`，因此 `5000` 在当前环境不可绑定。
+
+**最终处理**：
+
+- 经会话内确认后，改为本地监听：`127.0.0.1:5600`
+- 启动命令：`$env:HOST='127.0.0.1'; $env:PORT='5600'; python -u web_outlook_app.py`
+- 探活结果：`GET http://127.0.0.1:5600/` 返回 `200`
+- 页面标题：`登录 - Outlook 邮件管理`
+- 当前状态：`app5600` 会话保持运行中，进程监听 `127.0.0.1:5600`
+
+#### 178. 数据概览大盘 — Apple 风格视觉优化（卡片 / 悬浮层）
+
+**时间**：2026-04-19
+
+**本次范围**：
+
+- 用户明确收敛范围：**只改本次新实现的数据概览大盘功能**
+- 不扩散到旧页面与全站其他 UI
+
+**本次前端优化点**：
+
+1. `templates/index.html`
+   - 给 overview 头部增加 `ov-page-eyebrow`、`ov-page-title-row`、`ov-page-badge`
+   - 将刷新按钮纳入 overview 专属视觉样式
+2. `static/js/features/overview.js`
+   - 引入 `renderDataCard(options)` 与 `renderHoverNote(text)`，统一所有概览卡片结构
+   - 为 KPI 卡片、数据卡片、柱图增加更细腻的 hover 说明内容
+   - 将表格、柱图、时间线输出结构同步升级
+3. `static/css/main.css`
+   - 将 overview shell / KPI card / data card 统一为毛玻璃 + 柔和阴影 + 大圆角的 Apple 风格
+   - 新增 `ov-hover-note` 自定义悬浮层，替代土味提示体验
+   - 将 `data-table` 调整为行级卡片感；将 `timeline` 调整为玻璃时间线卡片；为柱图补充 `bar-popover`
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+以上文档已同步补充当前实际视觉实现：overview 采用 Apple 风格玻璃卡片体系与统一 hover 浮层。
+
+#### 179. 数据概览大盘 — 配色收敛到项目暖色体系
+
+**时间**：2026-04-19
+
+**本次只改配色，不动结构**：
+
+1. 保留 overview 已完成的玻璃卡片 / hover 浮层 / 表格卡片 / 时间线卡片结构。
+2. 不切到冷白蓝灰路线，继续贴合项目原有暖色基底。
+3. 将 overview 配色整体降饱和，收敛为 **暖米 / 茶棕 / 香槟金**，减少此前偏生硬的高饱和橙感。
+
+**实际修改文件**：
+
+- `static/css/main.css`
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+**结果**：
+
+- 数据概览大盘与主项目现有配色融合度更高
+- 仍保留 Apple 风格玻璃感，但不再显得跳脱
+
+#### 180. 数据概览大盘 — 修复提取后数据不刷新的假实时问题
+
+**时间**：2026-04-19
+
+**用户反馈**：
+
+- 重新提取后，概览页数据没有刷新
+- 用户要求展示真实数据库状态，而不是前端缓存出来的旧值
+
+**根因定位**：
+
+1. `static/js/features/overview.js` 在命中缓存时直接渲染，重新进入 dashboard 也不会强制重拉。
+2. 验证码提取成功后，前端没有通知 overview 相关缓存失效。
+
+**本次修复**：
+
+- `static/js/features/overview.js`
+  - 新增 `invalidateOverviewCache(tabIds)`
+  - 新增全局 `notifyOverviewDataChanged(tabIds, reason)`
+  - 进入 dashboard 时对当前 Tab 强制重拉一次真实后端数据
+  - 监听 `overview-data-changed`，在概览页可见时立即重拉当前 Tab
+- `static/js/features/groups.js`
+  - 在服务端提取成功后，主动通知 overview 失效 `summary` / `verification` / `activity` 缓存
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+**结果**：
+
+- 数据概览页不再只吃旧缓存
+- 提取成功后，概览页能够更快反映数据库里的真实新数据
+
+#### 181. 数据概览大盘 — “外部 UI / 统一监控面板”链路澄清与文档修正
+
+**时间**：2026-04-19
+
+**本次背景**：
+
+- 用户再次澄清：问题不是浏览器扩展，而是**正常前端 UI 使用提取验证码功能后，统一监控面板里的概览没有增加**。
+- 因此前一次把问题解释成“外部 UI / 浏览器扩展触发”的结论不准确，本次按实际代码重新核对并修正文档。
+
+**再次核对后的事实**：
+
+1. overview 的相关统计读取自 `verification_extract_logs`，因此面板数据是否增加，最终取决于提取动作有没有写入这张表。
+2. 当前主应用正常提取按钮由 `static/js/features/groups.js` 调用 `/api/emails/<email>/extract-verification`；临时邮箱则调用 `/api/temp-emails/<email>/extract-verification`。
+3. 这两条主应用旧接口当前没有统一复用 `outlook_web/services/external_api.py:get_verification_result()` 的 v23 埋点逻辑。
+4. `notifyOverviewDataChanged(...)` 当前只负责让前端缓存失效并重新请求 overview API；如果底层 `verification_extract_logs` 没新增，统一监控面板即使重拉也不会涨。
+5. 因此，当前真实根因不是只有“页面没有刷新”，而是**正常前端提取链路本身没有把统计写进 overview 依赖的日志表**。
+
+**三条线路现状矩阵**：
+
+| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
+|------|----------|-----------------------------------|------------------|
+| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ❌ | ❌ |
+| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ❌ | ❌ |
+
+**文档修正**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+  - 增补“术语对齐”，明确本次讨论的是主应用正常前端提取按钮
+  - 将“当前刷新边界”修正为：缓存失效只是表层，真正断点在旧提取接口未写 `verification_extract_logs`
+  - 将触发场景覆盖改为按实际代码区分“已接入 / 未接入”链路
+  - 新增“三条线路与总控板可见性”矩阵
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+  - 修正“`get_verification_result()` 是所有提取路径唯一入口”的错误表述
+  - 补充 `api_extract_verification()` / `api_extract_temp_email_verification()` 仍走旧链路、未接入 v23 埋点
+  - 明确 `notifyOverviewDataChanged(...)` 只会触发重拉，不会补写统计日志
+  - 记录后续优先方向：先统一内部提取入口，再考虑低频定期重拉
+  - 新增“三条提取线路接入情况”矩阵
+
+**本次范围**：
+
+- 仅修正文档与工作记录
+- 未改业务代码
+
+#### 182. 数据概览大盘 — 前端 UI 两条旧提取接口接入共享埋点链路
+
+**时间**：2026-04-19
+
+**本次实现目标**：
+
+- 让主应用前端 UI 的普通账号提取、临时邮箱提取，也进入总控板依赖的 `verification_extract_logs`
+- 保持浏览器 AIUI / 对外 API / 主应用前端 UI 三条线路最终都能被 overview 看到
+
+**实际代码改动**：
+
+1. `outlook_web/controllers/emails.py`
+   - `api_extract_verification()` 改为复用 `external_api.py:get_verification_result()`
+   - 普通账号前端提取现在与 external/shared 提取路径共用同一套埋点逻辑
+2. `outlook_web/services/verification_extract_log.py`
+   - 新增共享日志 helper
+   - 提供提取结果归一化与安全写库能力
+3. `outlook_web/services/external_api.py`
+   - 改为复用新的共享日志 helper
+4. `outlook_web/services/temp_mail_service.py`
+   - 临时邮箱提取加入日志写入
+   - 使用**负数 `temp_emails.id`** 作为 `verification_extract_logs.account_id` 的哨兵值
+5. `outlook_web/repositories/overview.py`
+   - recent 查询按 `account_id` 正负号分别回连 `accounts` / `temp_emails`
+   - 从而让临时邮箱提取记录也能在 overview recent 数据里正确显示邮箱地址
+
+**接入结果矩阵（实现后）**：
+
+| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
+|------|----------|-----------------------------------|------------------|
+| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ✅ | ✅ |
+| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ✅ | ✅ |
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+  - 改为当前实际状态：主应用前端 UI 两条提取接口均已接入日志表
+  - 补充 `account_id` 正负号语义
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+  - 补充普通账号统一到 `get_verification_result()`、临时邮箱走负 id 哨兵方案
+  - 更新三条线路接入矩阵为当前实现状态
+
+#### 183. 本地服务重启与探活 — 5600 已加载最新埋点实现
+
+**时间**：2026-04-19
+
+**本次操作**：
+
+1. 停止旧的 `app5600` 会话。
+2. 重新以 `HOST=127.0.0.1`、`PORT=5600` 启动 `python -u web_outlook_app.py`。
+3. 确认新的监听进程已占用 `127.0.0.1:5600`。
+4. 重新探活首页，确认应用已加载当前代码版本。
+
+**探活结果**：
+
+- 监听进程：`python`（PID `42332`）
+- 访问地址：`http://127.0.0.1:5600`
+- 首页探活：`GET /` → 跳转到 `/login`
+- 登录页标题：`登录 - Outlook 邮件管理`
+- 当前状态：本地服务已重启完成，可直接基于最新实现查看效果
+
+#### 184. 浏览器插件反馈收尾 — 记录“API 无效”待排查 Bug
+
+**时间**：2026-04-19
+
+**用户反馈**：
+
+- 今日收尾前新增一个浏览器插件侧问题：
+  - 浏览器插件在接入外部 API 后，会提示 **“API 无效”**
+
+**本次处理**：
+
+1. 不对该问题提前下技术结论。
+2. 先按实际用户反馈把它记录为**待排查已知 Bug**。
+3. 将该反馈补记到浏览器扩展相关技术文档，便于下次会话直接接着排查。
+
+**已同步文档**：
+
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 补记：2026-04-19 会话内，用户实际反馈插件接入外部 API 后出现“API 无效”提示，当前尚未完成根因定位
+
+**当前状态**：
+
+- Bug 已记录
+- 今日未继续展开技术排查
+- 可在下次会话中直接以此为入口继续定位
+
+#### 185. 浏览器插件“API 无效”修复 — 复制按钮改为复制真实 API Key
+
+**时间**：2026-04-20
+
+**根因定位**：
+
+1. 主应用“API 安全”设置页加载已保存的对外 API Key 时，前端输入框显示的是脱敏值。
+2. 原有 `copyExternalApiKey()` 直接复制输入框当前内容，因此复制到剪贴板的并不是真实明文。
+3. 浏览器插件把这个脱敏字符串作为 `X-API-Key` 调用 `/api/external/*`，后端就会返回“API Key 缺失或无效”。
+
+**本次修复**：
+
+- `outlook_web/controllers/settings.py`
+  - 新增 `api_get_external_api_key_plaintext()`
+  - 仅登录态可访问
+  - 返回当前真实对外 API Key 明文
+  - 追加审计日志：`copy_external_api_key`
+- `outlook_web/routes/settings.py`
+  - 注册 `GET /api/settings/external-api-key/plaintext`
+- `static/js/main.js`
+  - `copyExternalApiKey()` 改为：
+    - 若当前输入框是用户刚输入的明文，则直接复制
+    - 若当前输入框是已保存后的脱敏值，则先请求后端明文接口，再复制真实 Key
+    - 明文只用于本次复制，不回填到输入框长期展示
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 将该问题从“待排查”更新为已定位、已修复
+- `browser-extension/README.md`
+  - 更新配置说明与故障排查，明确应通过主应用复制按钮获取真实明文 Key
+
+**结果**：
+
+- 主应用“复制对外 API Key”按钮现在会复制正确的真实 Key
+- 浏览器插件不再因为复制到脱敏值而天然报“API 无效”
+
+#### 186. 浏览器插件第二类前置条件补记 — external pool / pool_access
+
+**时间**：2026-04-20
+
+**继续排查结论**：
+
+1. 浏览器插件的第一个真实业务请求不是验证码接口，而是 `POST /api/external/pool/claim-random`。
+2. 这条链路除了要求 `X-API-Key` 正确，还要求：
+   - 主应用已开启 `external pool`
+   - 如果使用的是多 Key，则该 Key 还必须具备 `pool_access`
+3. 因此，后续如果用户仍反馈“插件不可用”，第二优先检查项不该再只盯着 API Key 本身，而应同时检查 `external pool` 和 `pool_access` 配置。
+
+**本次文档回写**：
+
+- `browser-extension/README.md`
+  - 增补扩展可用的真实前置条件
+  - 新增两条故障排查：
+    - `功能 external_pool 当前未启用`
+    - `当前 API Key 无权访问 external pool`
+- `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md`
+  - 增补浏览器扩展依赖 `external pool` / `pool_access` 的前置条件说明
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 将当前会话补记升级为“两类真实问题来源”说明
+
+**当前判断**：
+
+- 复制脱敏值的问题已经修掉
+- 第二类真实失败来源是配置前置条件不足，而不是同一个 API Key bug 的重复出现
+
+#### 187. 本地服务重启与探活 — 127.0.0.1:5600 前台启动成功
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求重新启动本地服务并做实际探活
+- 先前尝试用 detached 方式启动时，进程仍回落到 `0.0.0.0:5000`，再次撞上当前 Windows 环境的保留端口
+
+**实际排查与处理**：
+
+1. 确认 `127.0.0.1:5600` 初始时没有监听进程
+2. 读取 detached 启动日志，确认失败原因仍然是：
+   - 实际绑定地址回落到 `0.0.0.0:5000`
+   - `5000` 在当前机器不可绑定
+3. 改为前台可见方式启动，并在 Python 进程内显式注入：
+   - `HOST=127.0.0.1`
+   - `PORT=5600`
+4. 服务成功启动后，再做监听与首页探活
+
+**探活结果**：
+
+- 监听地址：`127.0.0.1:5600`
+- 监听进程：`python`（PID `21644`）
+- 首页访问结果：`GET http://127.0.0.1:5600/` → `200`
+- 最终 URL：`http://127.0.0.1:5600/login`
+- 页面标题：`登录 - Outlook 邮件管理`
+
+**当前状态**：
+
+- 本地服务已成功运行在 `http://127.0.0.1:5600`
+- 当前使用的是前台 shell 会话 `app5600`
+
+#### 188. 运行日志分析 — 调度重叠告警由慢 IMAP 握手超时触发
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求在服务成功启动后，继续读取运行日志并分析“为什么有时候会突然提前报错”
+
+**读取到的关键日志**：
+
+1. `Execution of job "统一通知分发 ..." skipped: maximum number of running instances reached (1)`
+2. `IMAP fetch error ... _ssl.c:1011: The handshake operation timed out`
+3. `[notification_dispatch] grouped fetch failed ... err=_ssl.c:1011: The handshake operation timed out`
+
+**结合代码后的结论**：
+
+1. `统一通知分发` Job 在 `outlook_web/services/scheduler.py` 中配置为：
+   - 固定间隔执行
+   - `max_instances=1`
+   - `coalesce=True`
+2. `run_notification_dispatch_job()` 在 `outlook_web/services/notification_dispatch.py` 中会遍历活跃通知源，并为账号源调用 IMAP / Graph 拉信。
+3. 对 IMAP 账号，底层实际走 `telegram_push._fetch_new_emails_imap()`，其中 `imaplib.IMAP4_SSL(..., timeout=15)` 存在网络握手等待。
+4. 当某个账号（本次日志中为一个已掩码的 Gmail IMAP 账号）在 SSL 握手阶段超时后：
+   - 当前这一轮通知分发执行时间被拖长
+   - 下一次定时间隔到来时，由于 `max_instances=1`，APScheduler 会直接记录“maximum number of running instances reached”并跳过重叠执行
+5. 因此这里看到的“突然报错”本质上是**下游 IMAP 网络/握手超时导致的上游调度重叠告警**，不是应用启动失败，也不是 overview / 浏览器插件改动引入的新异常。
+
+**当前判断**：
+
+- `maximum number of running instances reached` 更偏向**保护性告警**
+- 真正值得继续追的是对应 IMAP 账号为什么会在握手阶段频繁超时（网络、代理、邮箱服务端、账号配置等）
+- 当前这类日志不会阻止 Web 主服务监听，也不会影响登录页可访问性；主服务已确认仍正常运行在 `127.0.0.1:5600`
+
+#### 189. 数据概览专项回归 — 修复 `_get_db_for_log` 兼容锚点后重新转绿
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求继续回到看板 TODO，重新验证数据概览大盘功能
+- 重新执行 overview 专项测试时，发现 1 个真实回归错误
+
+**首次失败现象**：
+
+- 用例：`tests.test_verification_extract_log.VerificationExtractLogWriteTests.test_write_extract_log_exception_does_not_propagate_to_caller`
+- 错误：`external_api.py` 中缺少 `_get_db_for_log`
+- 触发原因：此前将验证码提取日志写入逻辑抽到共享 helper 后，`external_api._write_extract_log()` 仍在，但测试依赖的兼容 patch 点 `_get_db_for_log` 被不小心丢失
+
+**本次修复**：
+
+1. `outlook_web/services/external_api.py`
+   - 补回 `_get_db_for_log()`
+   - `external_api._write_extract_log()` 改为先通过 `_get_db_for_log()` 取连接，再调用共享写库 helper
+   - 继续保持内部异常吞掉、不影响主流程
+2. `outlook_web/services/verification_extract_log.py`
+   - `write_verification_extract_log()` 新增可选 `db` 注入参数
+   - 这样既保留共享实现，又能兼容 `external_api` 侧测试锚点
+
+**复跑结果**：
+
+- 命令：
+  - `python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
+- 结果：
+  - `Ran 49 tests in 4.862s`
+  - `OK`
+
+**当前状态**：
+
+- 数据概览大盘 4 组专项测试已重新转绿
+- 当前运行中的本地服务仍保持在 `http://127.0.0.1:5600`
+
+#### 190. 全量回归复跑 — 修复 Web 提取兼容语义后恢复全绿
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求继续把全量测试全部跑完，确认不仅 overview 专项是绿的，整个仓库也仍然稳定
+
+**第一次全量结果**：
+
+- 命令：
+  - `python -m unittest discover -s tests -v`
+- 结果：
+  - `Ran 1243 tests in 310.579s`
+  - `FAILED (failures=2, skipped=7)`
+
+**首次失败的两个用例**：
+
+1. `test_outlook_basic_auth_regressions.py`
+   - `test_extract_verification_endpoint_preserves_imap_auth_error_from_list_step`
+2. `test_verification_channel_memory_v1.py`
+   - `test_web_failure_keeps_channel`
+
+**根因分析**：
+
+1. 普通账号前端提取入口接入 shared logging 后，内部 Web 路由 `/api/emails/<email>/extract-verification` 的一部分旧兼容契约被破坏了：
+   - IMAP generic 旧 patch 点没有继续透传到 shared service
+   - Web 提取场景原本应保持的 `EMAIL_NOT_FOUND / 404` 语义，被抬成了 `UPSTREAM_READ_FAILED / 502`
+2. `verification_channel_routing.py` 的 IMAP 连接复用失败后，错误优先级没有优先尊重 legacy list 返回，导致测试中的模拟失败未被正确采纳
+
+**本次修复**：
+
+- `outlook_web/controllers/emails.py`
+  - 对 IMAP 账号把 `get_emails_imap_generic` / `get_email_detail_imap_generic_result` 的旧 patch 点重新接回 shared service
+  - 为内部 Web 提取入口补回“普通全渠道失败 → `EMAIL_NOT_FOUND / 404`”的兼容判断
+- `outlook_web/services/verification_channel_routing.py`
+  - IMAP 连接复用路径失败后，优先采用 legacy list 返回的错误
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+  - 补记：普通账号前端虽然复用了 shared logging，但内部 Web 提取入口仍保留旧错误语义与 patch 兼容点
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+  - 同步补记：Web 内部错误语义不等同于 external API 对外错误码口径
+
+**复跑结果**：
+
+- 二次全量命令：
+  - `python -m unittest discover -s tests -v`
+- 结果：
+  - `Ran 1243 tests in 299.944s`
+  - `OK (skipped=7)`
+
+**当前状态**：
+
+- 数据概览专项测试：绿
+- 全量仓库回归：绿
+- 本地服务仍运行在 `http://127.0.0.1:5600`
+
+#### 191. 数据概览大盘 i18n 收口 — overview 可见文案统一接入翻译层
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户继续追 overview 的 i18n 问题，明确指出重点是翻译收口；其中“7 日调用趋势”本身不需要改功能逻辑
+
+**本次代码改动**：
+
+1. `static/js/features/overview.js`
+   - 新增 `ovT()` / `ovLocale()` / `ovLabelValue()` helper
+   - KPI 标题、note、卡片标题、badge、表头、空态、loading/error 文案统一通过翻译层输出
+   - `summary` 中直接拼接 HTML 的 `ov-kv` 标签文本也补接翻译
+   - 数字、时间格式改为跟随当前 UI 语言切换 `zh-CN` / `en-US`
+   - `timeline` / `channel` / `pool action` 等后端机器值增加展示层格式化，避免直接裸露 `verification_extract`、`notification:*`、`success/failed` 等码值
+   - 继续收口中文界面里的残留英文短词：`Top`、`Claim`、`Complete`、`Release`、`Expire`
+2. `static/js/i18n.js`
+   - 补齐 overview 相关词条，包括：
+     - KPI / 卡片标题
+     - table header / badge / empty state
+     - hover note 长文案
+     - pool / external / activity 里的短标签
+     - timeline / channel / status 展示用词条
+3. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记当前真实前端约束：overview 可见文案统一经 `translateAppTextLocal(...)`
+4. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `overview.js` / `i18n.js` 的 i18n 收口实现
+
+**本次范围**：
+
+- 仅处理 overview 页面可见文案与 locale 感知格式化
+- 未改“7 日调用趋势”本身的数据逻辑
+
+#### 192. 本地服务重启用于人工验收 — 5600 已加载本轮 overview i18n 改动
+
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求直接启动最新服务，准备开始人工验收 overview 页面
+
+**实际处理过程**：
+
+1. 先确认旧的 `app5600` 运行态与 `127.0.0.1:5600` 监听情况。
+2. 为确保人工验收看到的是**最新 i18n 改动**，先停止旧的 `app5600` 会话。
+3. 尝试用 detached 方式重新启动：
+   - 命令：`python -c "import os; os.environ['HOST']='127.0.0.1'; os.environ['PORT']='5600'; import web_outlook_app; web_outlook_app.main()"`
+   - 结果：进程立即退出，`5600` 无监听，首页探活返回 `502`
+4. 回退到此前已验证稳定的前台 shell 方式重新启动同一命令。
+
+**最新探活结果**：
+
+- 监听地址：`127.0.0.1:5600`
+- 监听进程：`python`（PID `25808`）
+- 首页探活：`GET http://127.0.0.1:5600/` → `302`
+- 跳转位置：`/login`
+- 当前状态：最新服务已运行，可直接开始人工验收
+
+#### 193. overview 人工验收回收问题 — 页头与 Tab 模板文案未接 i18n，同步修复后重启服务
+
+**时间**：2026-04-20
+
+**用户现场反馈**：
+
+- 用户打开最新页面后，实际看到：
+  - `玻璃态概览面板`
+  - `数据概览`
+  - `细腻卡片视图`
+  - `最近刷新：4/20/2026，10:37:47`
+  - `总览 / 验证码提取 / 对外API / 邮箱池 / 系统活动`
+- 这说明 overview 主体虽然已接入 i18n，但**页头与 Tab 按钮仍依赖模板初始中文**，没有走同一套翻译刷新流程
+
+**本次修复**：
+
+1. `templates/index.html`
+   - 为 overview 页头标题、badge、副标题、最近刷新标签、Tab 文案补充 DOM 锚点
+   - Tab 文案改为 icon + `.ov-tab-label` 结构，便于前端单独刷新文字
+2. `static/js/features/overview.js`
+   - 新增 `syncOverviewStaticText()`
+   - 在 `initOverview()` 与 `ui-language-changed` 事件里同步刷新：
+     - eyebrow
+     - page title
+     - badge
+     - subtitle
+     - refresh label
+     - 5 个 Tab 文案
+   - 这样 overview 页头、Tab 与主体 KPI/卡片共用同一套 i18n 刷新口径
+3. `static/js/i18n.js`
+   - 补齐 `玻璃态概览面板`、`细腻卡片视图`、`最近刷新：`、`总览`、`对外 API` 等缺失词条
+4. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记 overview 页头与 Tab 模板静态文案也已纳入翻译同步
+5. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `syncOverviewStaticText()` 与 `templates/index.html` 的 DOM 锚点改动
+
+**运行态处理**：
+
+- 停掉旧的 5600 进程后，重新以前台 shell 方式拉起最新服务
+- 当前最新会话：`app5600live`
+- 当前地址：`http://127.0.0.1:5600`
+
+#### 194. overview 二次人工验收补漏 — `刷新` / `邮箱池` 词条缺失
+
+**时间**：2026-04-20
+
+**现场反馈**：
+
+- 用户再次刷新页面后，overview 页头与 Tab 大部分已切到英文
+- 但仍残留两处中文：
+  - 按钮：`刷新`
+  - Tab：`邮箱池`
+
+**根因**：
+
+- 页头与 Tab 文本同步逻辑已生效
+- 但 `static/js/i18n.js` 里当时还缺少：
+  - `刷新`
+  - `邮箱池`
+
+**本次修复**：
+
+1. `static/js/i18n.js`
+   - 新增：
+     - `刷新` → `Refresh`
+     - `邮箱池` → `Mailbox Pool`
+   - 顺手把 `最近刷新：` 调整为 `Last refresh: `，补齐英文冒号后的空格
+2. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记二次人工验收发现的漏词条已补齐
+3. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `i18n.js` 本轮新增 `刷新` / `邮箱池`
+
+**当前状态**：
+
+- 服务仍运行在 `http://127.0.0.1:5600`
+- 当前可继续刷新页面做第三轮人工验收
+
+---
+
 ## 2026-04-18
 
 ### 操作记录

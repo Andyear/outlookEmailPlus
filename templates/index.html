@@ -31,7 +31,7 @@
             <nav class="sidebar-nav">
                 <div class="nav-section">概览</div>
                 <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-                    <span class="nav-icon">🏠</span><span>仪表盘</span>
+                    <span class="nav-icon">🏠</span><span>数据概览</span>
                 </button>
 
                 <div class="nav-section">邮箱管理</div>
@@ -90,8 +90,8 @@
                 <div class="topbar-left">
                     <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
                     <div>
-                        <div class="topbar-title" id="topbarTitle">仪表盘</div>
-                        <div class="topbar-subtitle" id="topbarSubtitle">系统概览</div>
+                        <div class="topbar-title" id="topbarTitle">数据概览</div>
+                        <div class="topbar-subtitle" id="topbarSubtitle">运营数据大盘</div>
                     </div>
                 </div>
                 <div id="topbar-actions"></div>
@@ -110,44 +110,60 @@
 
             <!-- ===== Page: Dashboard ===== -->
             <div class="page" id="page-dashboard">
-                <div class="stat-grid" id="dashboardStats">
-                    <div class="stat-card">
-                        <div class="stat-label">总账号数</div>
-                        <div class="stat-value" id="statTotalAccounts">-</div>
-                    </div>
-                    <div class="stat-card stat-success">
-                        <div class="stat-label">Token 有效</div>
-                        <div class="stat-value" id="statValidTokens">-</div>
-                    </div>
-                    <div class="stat-card stat-danger">
-                        <div class="stat-label">Token 过期</div>
-                        <div class="stat-value" id="statExpiredTokens">-</div>
-                    </div>
-                    <div class="stat-card stat-accent">
-                        <div class="stat-label">临时邮箱</div>
-                        <div class="stat-value" id="statTempEmails">-</div>
-                    </div>
+                <div style="display:none;">
+                    <div id="statTotalAccounts"></div>
+                    <div id="statValidTokens"></div>
+                    <div id="statExpiredTokens"></div>
+                    <div id="statTempEmails"></div>
+                    <ul id="dashboardGroupList"></ul>
                 </div>
-
-                <div class="dashboard-grid">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">📂 分组概览</div>
+                <div class="overview-tab-shell ov-apple-shell">
+                    <div class="ov-page-header">
+                        <div class="ov-page-heading">
+                            <div class="ov-page-eyebrow" id="ov-page-eyebrow">玻璃态概览面板</div>
+                            <div class="ov-page-title-row">
+                                <div class="ov-page-title" id="ov-page-title">📊 数据概览</div>
+                                <span class="ov-page-badge" id="ov-page-badge">细腻卡片视图</span>
+                            </div>
+                            <div class="ov-page-subtitle" id="ov-page-subtitle">账号、验证码、对外 API、邮箱池与系统活动统一看板</div>
                         </div>
-                        <div class="card-body" style="padding:0;">
-                            <ul class="dashboard-list" id="dashboardGroupList">
-                                <li><span class="loading-overlay"><span class="spinner"></span> 加载中…</span></li>
-                            </ul>
+                        <div class="ov-page-actions">
+                            <span class="ov-refresh-hint"><span id="ov-refresh-label">最近刷新：</span><strong id="ov-last-refresh">--</strong></span>
+                            <button class="btn btn-sm btn-ghost ov-refresh-btn" id="ov-refresh-btn">⟳ 刷新</button>
                         </div>
                     </div>
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="card-title">🔄 最近刷新</div>
+
+                    <div class="settings-tab-nav ov-tab-nav">
+                        <button class="settings-tab ov-tab active" data-tab="summary">📊 <span class="ov-tab-label">总览</span></button>
+                        <button class="settings-tab ov-tab" data-tab="verification">🔑 <span class="ov-tab-label">验证码提取</span></button>
+                        <button class="settings-tab ov-tab" data-tab="external-api">🌐 <span class="ov-tab-label">对外 API</span></button>
+                        <button class="settings-tab ov-tab" data-tab="pool">🎱 <span class="ov-tab-label">邮箱池</span></button>
+                        <button class="settings-tab ov-tab" data-tab="activity">📋 <span class="ov-tab-label">系统活动</span></button>
+                    </div>
+
+                    <div class="settings-tab-pane ov-tab-pane active" data-tab="summary">
+                        <div id="ov-summary-body" class="ov-pane-body">
+                            <div class="ov-empty">加载中…</div>
                         </div>
-                        <div class="card-body" style="padding:0;">
-                            <ul class="dashboard-list" id="dashboardRefreshList">
-                                <li><span class="loading-overlay"><span class="spinner"></span> 加载中…</span></li>
-                            </ul>
+                    </div>
+                    <div class="settings-tab-pane ov-tab-pane" data-tab="verification">
+                        <div id="ov-verification-body" class="ov-pane-body">
+                            <div class="ov-empty">点击后加载</div>
+                        </div>
+                    </div>
+                    <div class="settings-tab-pane ov-tab-pane" data-tab="external-api">
+                        <div id="ov-external-api-body" class="ov-pane-body">
+                            <div class="ov-empty">点击后加载</div>
+                        </div>
+                    </div>
+                    <div class="settings-tab-pane ov-tab-pane" data-tab="pool">
+                        <div id="ov-pool-body" class="ov-pane-body">
+                            <div class="ov-empty">点击后加载</div>
+                        </div>
+                    </div>
+                    <div class="settings-tab-pane ov-tab-pane" data-tab="activity">
+                        <div id="ov-activity-body" class="ov-pane-body">
+                            <div class="ov-empty">点击后加载</div>
                         </div>
                     </div>
                 </div>

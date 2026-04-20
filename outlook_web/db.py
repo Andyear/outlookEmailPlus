@@ -36,7 +36,8 @@ from outlook_web.security.crypto import (
 # v20：2026-04-10 验证码提取提速与 AI 增强（groups 表新增提取策略字段）
 # v21：2026-04-11 Outlook OAuth 验证码提取渠道记忆（accounts.preferred_verification_channel）
 # v22：2026-04-16 邮箱池项目维度成功复用（accounts.claimed_project_key + account_project_usage.success_*）
-DB_SCHEMA_VERSION = 22
+# v23：2026-04-19 数据概览大盘（verification_extract_logs + overview 兼容字段）
+DB_SCHEMA_VERSION = 23
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -273,6 +274,8 @@ def init_db(database_path: Optional[str] = None):
                 resource_type TEXT NOT NULL,
                 resource_id TEXT,
                 user_ip TEXT,
+                operator TEXT,
+                status TEXT DEFAULT '',
                 details TEXT,
                 trace_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -286,6 +289,12 @@ def init_db(database_path: Optional[str] = None):
             CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at
             ON audit_logs(created_at)
             """)
+        cursor.execute("PRAGMA table_info(audit_logs)")
+        audit_logs_columns = [col[1] for col in cursor.fetchall()]
+        if "operator" not in audit_logs_columns:
+            cursor.execute("ALTER TABLE audit_logs ADD COLUMN operator TEXT")
+        if "status" not in audit_logs_columns:
+            cursor.execute("ALTER TABLE audit_logs ADD COLUMN status TEXT DEFAULT ''")
 
         # 标签表
         cursor.execute("""
@@ -958,9 +967,12 @@ def init_db(database_path: Optional[str] = None):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 consumer_key TEXT NOT NULL,
                 consumer_name TEXT NOT NULL DEFAULT '',
-                usage_date TEXT NOT NULL,
-                endpoint TEXT NOT NULL,
+                caller_id TEXT NOT NULL DEFAULT '',
+                usage_date TEXT NOT NULL DEFAULT '',
+                date TEXT NOT NULL DEFAULT '',
+                endpoint TEXT NOT NULL DEFAULT '',
                 total_count INTEGER NOT NULL DEFAULT 0,
+                call_count INTEGER NOT NULL DEFAULT 0,
                 success_count INTEGER NOT NULL DEFAULT 0,
                 error_count INTEGER NOT NULL DEFAULT 0,
                 last_status TEXT NOT NULL DEFAULT '',
@@ -974,6 +986,29 @@ def init_db(database_path: Optional[str] = None):
             CREATE INDEX IF NOT EXISTS idx_external_api_consumer_usage_daily_key
             ON external_api_consumer_usage_daily(consumer_key, usage_date)
             """)
+        cursor.execute("PRAGMA table_info(external_api_consumer_usage_daily)")
+        external_usage_columns = [col[1] for col in cursor.fetchall()]
+        if "caller_id" not in external_usage_columns:
+            cursor.execute(
+                "ALTER TABLE external_api_consumer_usage_daily ADD COLUMN caller_id TEXT NOT NULL DEFAULT ''"
+            )
+        if "date" not in external_usage_columns:
+            cursor.execute("ALTER TABLE external_api_consumer_usage_daily ADD COLUMN date TEXT NOT NULL DEFAULT ''")
+        if "call_count" not in external_usage_columns:
+            cursor.execute(
+                "ALTER TABLE external_api_consumer_usage_daily ADD COLUMN call_count INTEGER NOT NULL DEFAULT 0"
+            )
+        cursor.execute(
+            """
+            UPDATE external_api_consumer_usage_daily
+            SET caller_id = COALESCE(NULLIF(caller_id, ''), consumer_name, consumer_key),
+                date = COALESCE(NULLIF(date, ''), usage_date),
+                call_count = CASE
+                    WHEN COALESCE(call_count, 0) <= 0 AND COALESCE(total_count, 0) > 0 THEN total_count
+                    ELSE COALESCE(call_count, 0)
+                END
+            """
+        )
 
         # v11: 邮箱池字段 + account_claim_logs 表（PRD-00009 MT-1）
         cursor.execute("PRAGMA table_info(accounts)")
@@ -1003,6 +1038,7 @@ def init_db(database_path: Optional[str] = None):
                 action TEXT NOT NULL,
                 result TEXT DEFAULT NULL,
                 detail TEXT DEFAULT NULL,
+                claimed_at TEXT DEFAULT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (account_id) REFERENCES accounts(id)
             )
@@ -1023,6 +1059,17 @@ def init_db(database_path: Optional[str] = None):
             CREATE INDEX IF NOT EXISTS idx_accounts_pool_status
             ON accounts(pool_status)
             """)
+        cursor.execute("PRAGMA table_info(account_claim_logs)")
+        account_claim_log_columns = [col[1] for col in cursor.fetchall()]
+        if "claimed_at" not in account_claim_log_columns:
+            cursor.execute("ALTER TABLE account_claim_logs ADD COLUMN claimed_at TEXT DEFAULT NULL")
+        cursor.execute(
+            """
+            UPDATE account_claim_logs
+            SET claimed_at = COALESCE(claimed_at, created_at)
+            WHERE claimed_at IS NULL
+            """
+        )
 
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool_cooldown_seconds', '86400')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool_default_lease_seconds', '600')")
@@ -1114,6 +1161,39 @@ def init_db(database_path: Optional[str] = None):
                   AND COALESCE(provider, '') != 'cloudflare_temp_mail'
                   AND COALESCE(account_type, '') != 'temp_mail'
                 """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS verification_extract_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                started_at REAL NOT NULL,
+                finished_at REAL NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                result_type TEXT NOT NULL,
+                code_found TEXT,
+                used_ai INTEGER NOT NULL DEFAULT 0,
+                error_code TEXT,
+                trace_id TEXT,
+                created_at REAL NOT NULL DEFAULT (unixepoch('now'))
+            )
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_vel_account_id
+            ON verification_extract_logs(account_id)
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_vel_started_at
+            ON verification_extract_logs(started_at)
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_vel_channel
+            ON verification_extract_logs(channel)
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_vel_result_type
+            ON verification_extract_logs(result_type)
+            """)
 
         # 迁移现有明文数据为加密数据
         migrate_sensitive_data(conn)

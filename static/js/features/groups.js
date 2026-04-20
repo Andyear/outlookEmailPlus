@@ -880,6 +880,9 @@
                 if (data.success && data.data && data.data.formatted) {
                     await copyToClipboard(data.data.formatted);
                     syncExtractedVerificationToAccountCache(email, data.data, data.account_summary || null);
+                    if (typeof window.notifyOverviewDataChanged === 'function') {
+                        window.notifyOverviewDataChanged(['summary', 'verification', 'activity'], 'verification-extracted');
+                    }
                     showToast(
                         getUiLanguage() === 'en'
                             ? `Copied: ${data.data.formatted}`

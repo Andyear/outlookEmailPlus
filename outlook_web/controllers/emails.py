@@ -36,38 +36,6 @@ _EXTERNAL_NESTED_UPSTREAM_CODES = {
     "IMAP_FOLDER_NOT_FOUND",
 }
 
-
-def _resolve_verification_policy(
-    *,
-    email_addr: str,
-    account: Optional[dict[str, Any]] = None,
-    request_code_length: Any = None,
-    request_code_regex: Any = None,
-    apply_default: bool = True,
-    request_error_code: str = "INVALID_PARAM",
-) -> Dict[str, Any]:
-    """统一解析验证码提取策略：request > group > default；group 内 regex > length。"""
-
-    target_account = account
-    if target_account is None:
-        target_account = accounts_repo.get_account_by_email(email_addr)
-
-    group = None
-    if target_account and target_account.get("group_id"):
-        group = groups_repo.get_group_by_id(int(target_account["group_id"]))
-
-    policy = groups_repo.resolve_group_verification_policy(
-        request_code_length=request_code_length,
-        request_code_regex=request_code_regex,
-        group=group,
-        default_code_length="6-6",
-        apply_default=apply_default,
-        request_error_code=request_error_code,
-    )
-    policy["group"] = group
-    return policy
-
-
 def _build_response_from_error_payload(error_payload: dict[str, Any]):
     return build_error_response(
         str(error_payload.get("code") or "INTERNAL_ERROR"),
@@ -596,13 +564,6 @@ def api_extract_verification(email_addr: str) -> Any:
     3. IMAP (新服务器) - Graph API 失败时回退
     4. IMAP (旧服务器) - 最后的回退方案
     """
-    from outlook_web.services.verification_extractor import (
-        enhance_verification_with_ai_fallback,
-        extract_verification_info_with_options,
-        get_verification_ai_runtime_config,
-        is_verification_ai_config_complete,
-    )
-
     _t0 = time.monotonic()
     _LOGGER.debug("[PERF] extract_verification | 开始 | email=%s", email_addr)
 
@@ -630,256 +591,67 @@ def api_extract_verification(email_addr: str) -> Any:
             status=400,
         )
 
-    try:
-        verification_policy = _resolve_verification_policy(
-            email_addr=email_addr,
-            account=account,
-            request_code_length=request_code_length,
-            request_code_regex=request_code_regex,
-            apply_default=True,
-            request_error_code="INVALID_PARAM",
-        )
-    except groups_repo.GroupPolicyValidationError as exc:
-        if exc.code == "INVALID_PARAM":
-            return build_error_response(
-                "INVALID_PARAM",
-                "参数错误",
-                message_en="Invalid parameters",
-                status=400,
-            )
-        return build_error_response(exc.code, exc.message, status=400)
-
-    policy_group = verification_policy.get("group") if isinstance(verification_policy, dict) else None
-
-    # PRD-00005：IMAP 账号验证码提取走 IMAP（Generic）→ 详情 → extractor；Outlook 保持原 Graph→IMAP XOAUTH2 回退链
     account_type = (account.get("account_type") or "outlook").strip().lower()
     if account_type != "imap":
         decrypt_error_response = _build_account_credential_decrypt_failed_response(account)
         if decrypt_error_response:
             return decrypt_error_response
 
-    if account_type == "imap":
-        _t_imap_list = time.monotonic()
-        emails_result = get_emails_imap_generic(
+    try:
+        if account_type == "imap":
+            external_api_service.get_emails_imap_generic = get_emails_imap_generic
+            external_api_service.get_email_detail_imap_generic_result = get_email_detail_imap_generic_result
+
+        data = external_api_service.get_verification_result(
             email_addr=email_addr,
-            imap_password=account.get("imap_password", "") or "",
-            imap_host=account.get("imap_host", "") or "",
-            imap_port=account.get("imap_port", 993) or 993,
-            folder="inbox",
-            provider=account.get("provider", "_default") or "_default",
-            skip=0,
-            top=1,
+            code_regex=request_code_regex,
+            code_length=request_code_length,
+            code_source=code_source,
         )
+        if not data.get("formatted") and not data.get("verification_code") and not data.get("verification_link"):
+            raise external_api_service.MailNotFoundError("未找到验证信息", data={"email": email_addr})
+
+        account_summary = _update_account_summary_from_verification(account, data)
         _LOGGER.debug(
-            "[PERF] extract_verification | email=%s | imap_list | %dms | success=%s",
+            "[PERF] extract_verification | email=%s | 总耗时=%dms | path=shared_logging | success=true",
             email_addr,
-            (time.monotonic() - _t_imap_list) * 1000,
-            emails_result.get("success"),
+            (time.monotonic() - _t0) * 1000,
         )
-
-        if not emails_result.get("success"):
-            error_payload = emails_result.get("error") or {}
-            if isinstance(error_payload, dict) and error_payload.get("code"):
-                return _build_response_from_error_payload(error_payload)
-            return build_error_response(
-                "EMAIL_FETCH_FAILED",
-                "获取邮件失败",
-                message_en="Failed to fetch email",
-                err_type="IMAPError",
-                status=500,
-                details=emails_result,
-            )
-
-        emails = emails_result.get("emails") or []
-        if not emails:
-            error_payload = build_error_payload(
-                "EMAIL_NOT_FOUND",
-                "未找到邮件",
-                "NotFoundError",
-                404,
-                f"email={email_addr}",
-            )
-            return jsonify({"success": False, "error": error_payload}), 404
-
-        latest_email = emails[0]
-        _t_imap_detail = time.monotonic()
-        detail_result = get_email_detail_imap_generic_result(
-            email_addr=email_addr,
-            imap_password=account.get("imap_password", "") or "",
-            imap_host=account.get("imap_host", "") or "",
-            imap_port=account.get("imap_port", 993) or 993,
-            message_id=latest_email.get("id") or "",
-            folder="inbox",
-            provider=account.get("provider", "_default") or "_default",
+        return jsonify(
+            {
+                "success": True,
+                "data": data,
+                "message": "提取成功",
+                "account_summary": account_summary,
+            }
         )
-        _LOGGER.debug(
-            "[PERF] extract_verification | email=%s | imap_detail | %dms | success=%s",
-            email_addr,
-            (time.monotonic() - _t_imap_detail) * 1000,
-            detail_result.get("success"),
-        )
-
-        if not detail_result.get("success"):
-            return _build_response_from_error_payload(detail_result.get("error") or {})
-        detail = detail_result.get("email") or {}
-
-        # 构建邮件对象用于提取（避免把 HTML 放进 body 导致 extractor 不走 HTML->text）
-        email_obj = {
-            "subject": detail.get("subject", ""),
-            "body": detail.get("body_text", ""),
-            "body_html": detail.get("body_html", ""),
-            "body_preview": latest_email.get("body_preview", ""),
-        }
-
-        try:
-            _t_regex = time.monotonic()
-            result = extract_verification_info_with_options(
-                email_obj,
-                code_regex=verification_policy.get("code_regex"),
-                code_length=verification_policy.get("code_length"),
-                code_source=code_source,
-            )
-            _LOGGER.debug(
-                "[PERF] extract_verification | email=%s | imap_regex | %dms",
-                email_addr,
-                (time.monotonic() - _t_regex) * 1000,
-            )
-            ai_config = get_verification_ai_runtime_config()
-            if ai_config.get("enabled") and not is_verification_ai_config_complete(ai_config):
-                return build_error_response(
-                    "VERIFICATION_AI_CONFIG_INCOMPLETE",
-                    "验证码 AI 已开启，请完整填写 Base URL、API Key、模型 ID",
-                    status=400,
-                )
-            _t_ai = time.monotonic()
-            result = enhance_verification_with_ai_fallback(
-                email=email_obj,
-                extracted=result,
-                code_regex=verification_policy.get("code_regex"),
-                code_length=verification_policy.get("code_length"),
-                code_source=code_source,
-            )
-            _LOGGER.debug(
-                "[PERF] extract_verification | email=%s | imap_ai_fallback | %dms",
-                email_addr,
-                (time.monotonic() - _t_ai) * 1000,
-            )
-            if not result.get("formatted"):
-                raise ValueError("未找到验证信息")
-            account_summary = compact_summary_service.update_summary_from_verification(
-                int(account["id"]),
-                message=latest_email,
-                verification_code=str(result.get("verification_code") or ""),
-                folder="inbox",
-            )
-            result.update(
-                {
-                    "email": email_addr,
-                    "subject": latest_email.get("subject", ""),
-                    "from": latest_email.get("from", ""),
-                    "received_at": latest_email.get("date", ""),
-                    "folder": "inbox",
-                }
-            )
-            _LOGGER.debug(
-                "[PERF] extract_verification | email=%s | 总耗时=%dms | path=imap_generic | success=true",
-                email_addr,
-                (time.monotonic() - _t0) * 1000,
-            )
-            return jsonify(
-                {
-                    "success": True,
-                    "data": result,
-                    "message": "提取成功",
-                    "account_summary": account_summary,
-                }
-            )
-        except ValueError as e:
-            error_payload = build_error_payload(
-                "VERIFICATION_NOT_FOUND",
-                str(e),
-                "NotFoundError",
-                404,
-                f"email={email_addr}",
-            )
-            return jsonify({"success": False, "error": error_payload}), 404
-        except Exception as e:
-            error_payload = build_error_payload("EXTRACT_ERROR", "提取失败", "ExtractError", 500, str(e))
-            return jsonify({"success": False, "error": error_payload}), 500
-
-    # 获取分组代理设置
-    proxy_url = ""
-    if policy_group:
-        proxy_url = policy_group.get("proxy_url", "") or ""
-    elif account.get("group_id"):
-        group = groups_repo.get_group_by_id(account["group_id"])
-        if group:
-            proxy_url = group.get("proxy_url", "") or ""
-
-    ai_config = get_verification_ai_runtime_config()
-    if ai_config.get("enabled") and not is_verification_ai_config_complete(ai_config):
+    except external_api_service.MailNotFoundError as exc:
         return build_error_response(
-            "VERIFICATION_AI_CONFIG_INCOMPLETE",
-            "验证码 AI 已开启，请完整填写 Base URL、API Key、模型 ID",
-            status=400,
+            "EMAIL_NOT_FOUND",
+            str(exc.message or "未找到匹配邮件"),
+            message_en="Email not found",
+            status=404,
+            details=exc.data or f"email={email_addr}",
         )
-
-    result = verification_channel_service.extract_verification_for_outlook(
-        account=account,
-        proxy_url=proxy_url,
-        resolved_policy=verification_policy,
-        code_source=code_source,
-    )
-    if not result.get("success"):
-        error_code = str(result.get("error_code") or "UNKNOWN")
-        error_message = str(result.get("error_message") or "提取失败")
-        error_status = int(result.get("error_status") or 404)
-
-        if error_code == "ACCOUNT_AUTH_EXPIRED" and result.get("graph_auth_expired"):
+    except external_api_service.ExternalApiError as exc:
+        if _should_return_email_not_found_for_web_extract(exc):
             return build_error_response(
-                "ACCOUNT_AUTH_EXPIRED",
-                error_message,
-                message_en="Account authorization has expired. Please re-authorize the account",
-                err_type="AuthorizationError",
-                status=401,
-                details={
-                    "email": email_addr,
-                    "upstream_errors": result.get("upstream_errors"),
-                },
+                "EMAIL_NOT_FOUND",
+                "未找到匹配邮件",
+                message_en="Email not found",
+                status=404,
+                details=exc.data or f"email={email_addr}",
             )
-
-        payload_code = error_code if error_code != "UNKNOWN" else "EMAIL_NOT_FOUND"
-        if payload_code == "ACCOUNT_AUTH_EXPIRED":
-            payload_code = "EMAIL_NOT_FOUND"
-            error_message = "未找到邮件"
-            error_status = 404
-        error_payload = build_error_payload(
-            payload_code,
-            error_message,
-            "NotFoundError" if error_status == 404 else "ExtractError",
-            error_status,
-            result.get("upstream_errors"),
+        resolved = _resolve_external_error(exc, allow_nested_upstream=True)
+        return build_error_response(
+            resolved["code"],
+            resolved["message"],
+            status=resolved["status"],
+            details=resolved["data"] or "",
         )
-        return jsonify({"success": False, "error": error_payload}), error_status
-
-    data = dict(result.get("data") or {})
-    account_summary = _update_account_summary_from_verification(account, data)
-    if result.get("new_refresh_token"):
-        _persist_refresh_token(account, str(result.get("new_refresh_token") or ""))
-
-    _LOGGER.debug(
-        "[PERF] extract_verification | email=%s | 总耗时=%dms | path=unified_outlook | success=true",
-        email_addr,
-        (time.monotonic() - _t0) * 1000,
-    )
-    return jsonify(
-        {
-            "success": True,
-            "data": data,
-            "message": "提取成功",
-            "account_summary": account_summary,
-        }
-    )
+    except Exception as e:
+        error_payload = build_error_payload("EXTRACT_ERROR", "提取失败", "ExtractError", 500, str(e))
+        return jsonify({"success": False, "error": error_payload}), 500
 
 
 # ==================== External Emails API ====================
@@ -973,6 +745,32 @@ def _resolve_external_error(
 def _external_error_response(exc: external_api_service.ExternalApiError, *, allow_nested_upstream: bool = False):
     resolved = _resolve_external_error(exc, allow_nested_upstream=allow_nested_upstream)
     return jsonify(external_api_service.fail(resolved["code"], resolved["message"], data=resolved["data"])), resolved["status"]
+
+
+def _should_return_email_not_found_for_web_extract(exc: external_api_service.ExternalApiError) -> bool:
+    if not isinstance(exc, external_api_service.UpstreamReadFailedError):
+        return False
+
+    details = exc.data if isinstance(exc.data, dict) else None
+    if not details:
+        return False
+
+    channel_errors = [item for item in details.values() if isinstance(item, dict)]
+    if not channel_errors:
+        channel_errors = [details]
+
+    for item in channel_errors:
+        code = str(item.get("code") or "").strip().upper()
+        try:
+            status = int(item.get("status") or 0)
+        except Exception:
+            status = 0
+        if code in {"IMAP_AUTH_FAILED", "IMAP_CONNECT_FAILED", "IMAP_FOLDER_NOT_FOUND", "ACCOUNT_AUTH_EXPIRED"}:
+            return False
+        if status in {401, 403}:
+            return False
+
+    return True
 
 
 @api_key_required

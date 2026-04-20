@@ -22,6 +22,10 @@ from outlook_web.services.imap_generic import (
     get_emails_imap_generic,
 )
 from outlook_web.services.temp_mail_service import TempMailError, get_temp_mail_service
+from outlook_web.services.verification_extract_log import (
+    resolve_extract_log_outcome,
+    write_verification_extract_log,
+)
 from outlook_web.services.verification_extractor import (
     apply_confidence_gate,
     enhance_verification_with_ai_fallback,
@@ -845,6 +849,69 @@ def _shape_verification_result_by_expected_field(extracted: Dict[str, Any], expe
     return result
 
 
+def _classify_extract_error(exc: Exception) -> str:
+    if isinstance(exc, ExternalApiError):
+        return str(exc.code or "INTERNAL_ERROR")
+    return type(exc).__name__.upper()
+
+
+def _resolve_extract_log_channel(result: Optional[Dict[str, Any]], *, folder: str, method: str) -> str:
+    if result and result.get("_log_channel"):
+        return str(result.get("_log_channel") or "")
+
+    mapped = verification_channel_service.map_method_to_verification_channel(method, folder=folder)
+    if mapped:
+        return mapped
+
+    method_text = str(method or "").strip().lower()
+    if "temp" in method_text:
+        return "temp_mail"
+    return "unknown"
+
+
+def _strip_extract_log_fields(result: Dict[str, Any]) -> Dict[str, Any]:
+    clean = dict(result or {})
+    clean.pop("_log_channel", None)
+    clean.pop("_log_used_ai", None)
+    return clean
+
+
+def _get_db_for_log():
+    from outlook_web.db import get_db
+
+    return get_db()
+
+
+def _write_extract_log(
+    *,
+    account_id: Optional[int],
+    channel: str,
+    started_at: float,
+    finished_at: float,
+    result_type: str,
+    code_found: Optional[str],
+    used_ai: bool,
+    error_code: Optional[str],
+    trace_id: Optional[str],
+) -> None:
+    try:
+        db = _get_db_for_log()
+        write_verification_extract_log(
+            account_id=account_id,
+            channel=channel,
+            started_at=started_at,
+            finished_at=finished_at,
+            result_type=result_type,
+            code_found=code_found,
+            used_ai=used_ai,
+            error_code=error_code,
+            trace_id=trace_id,
+            db=db,
+        )
+    except Exception:
+        pass
+
+
 def _extract_verification_with_memory_for_outlook(  # noqa: C901
     *,
     account: Dict[str, Any],
@@ -907,7 +974,19 @@ def _extract_verification_with_memory_for_outlook(  # noqa: C901
         except Exception:
             pass
 
-    return _shape_verification_result_by_expected_field(result.get("data") or {}, expected_field)
+    shaped = _shape_verification_result_by_expected_field(result.get("data") or {}, expected_field)
+    shaped["_log_channel"] = (
+        result.get("_log_channel")
+        or (result.get("data") or {}).get("_log_channel")
+        or result.get("channel_used")
+        or "unknown"
+    )
+    shaped["_log_used_ai"] = bool(
+        result.get("_log_used_ai")
+        or (result.get("data") or {}).get("_used_ai")
+        or (result.get("data") or {}).get("_log_used_ai")
+    )
+    return shaped
 
 
 def get_verification_result(
@@ -925,7 +1004,22 @@ def get_verification_result(
     expected_field: str | None = None,
     enable_channel_memory: bool = True,
 ) -> Dict[str, Any]:
+    started_at = time.time()
+    account_id: Optional[int] = None
+    log_channel = "unknown"
+    used_ai = False
+    error_code: Optional[str] = None
+    trace_id: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+
+    trace_id = None
+
     account = accounts_repo.get_account_by_email((email_addr or "").strip())
+    if account and account.get("id") is not None:
+        try:
+            account_id = int(account.get("id"))
+        except (TypeError, ValueError):
+            account_id = None
     group = None
     if account and account.get("group_id"):
         try:
@@ -957,63 +1051,110 @@ def get_verification_result(
         and str(folder or "inbox").strip().lower() == "inbox"
         and verification_channel_service.is_outlook_oauth_account(account)
     ):
-        return _extract_verification_with_memory_for_outlook(
-            account=account,
+        try:
+            result = _extract_verification_with_memory_for_outlook(
+                account=account,
+                email_addr=email_addr,
+                from_contains=from_contains,
+                subject_contains=subject_contains,
+                since_minutes=since_minutes,
+                baseline_timestamp=baseline_timestamp,
+                resolved_policy=resolved_policy,
+                code_source=code_source,
+                expected_field=expected_field,
+            )
+            log_channel = str(result.get("_log_channel") or "unknown")
+            used_ai = bool(result.get("_log_used_ai"))
+            return _strip_extract_log_fields(result)
+        except Exception as exc:
+            error_code = _classify_extract_error(exc)
+            raise
+        finally:
+            result_type, code_found = resolve_extract_log_outcome(result)
+            _write_extract_log(
+                account_id=account_id,
+                channel=log_channel,
+                started_at=started_at,
+                finished_at=time.time(),
+                result_type=result_type,
+                code_found=code_found,
+                used_ai=used_ai,
+                error_code=error_code,
+                trace_id=trace_id,
+            )
+
+    try:
+        latest_summary = get_latest_message_for_external(
             email_addr=email_addr,
+            folder=folder,
             from_contains=from_contains,
             subject_contains=subject_contains,
             since_minutes=since_minutes,
             baseline_timestamp=baseline_timestamp,
-            resolved_policy=resolved_policy,
-            code_source=code_source,
-            expected_field=expected_field,
         )
+        message_id = str(latest_summary.get("id") or "")
+        method = str(latest_summary.get("method") or "")
 
-    latest_summary = get_latest_message_for_external(
-        email_addr=email_addr,
-        folder=folder,
-        from_contains=from_contains,
-        subject_contains=subject_contains,
-        since_minutes=since_minutes,
-        baseline_timestamp=baseline_timestamp,
-    )
-    message_id = str(latest_summary.get("id") or "")
-    method = str(latest_summary.get("method") or "")
+        detail = get_message_detail_for_external(email_addr=email_addr, message_id=message_id, folder=folder)
 
-    detail = get_message_detail_for_external(email_addr=email_addr, message_id=message_id, folder=folder)
+        email_obj = {
+            "subject": detail.get("subject") or "",
+            "body": detail.get("content") or "",
+            "body_html": detail.get("html_content") or "",
+            "body_preview": latest_summary.get("content_preview") or "",
+        }
+        extracted = extract_verification_info_with_options(
+            email_obj,
+            code_regex=resolved_policy.get("code_regex"),
+            code_length=resolved_policy.get("code_length"),
+            code_source=code_source,
+            enforce_mutual_exclusion=False,
+        )
+        extracted = enhance_verification_with_ai_fallback(
+            email=email_obj,
+            extracted=extracted,
+            code_regex=resolved_policy.get("code_regex"),
+            code_length=resolved_policy.get("code_length"),
+            code_source=code_source,
+            enforce_mutual_exclusion=False,
+        )
+        # ── 可信度门控：与临时邮箱提取路径使用统一逻辑 ──
+        extracted = apply_confidence_gate(extracted, enforce_mutual_exclusion=False)
 
-    email_obj = {
-        "subject": detail.get("subject") or "",
-        "body": detail.get("content") or "",
-        "body_html": detail.get("html_content") or "",
-        "body_preview": latest_summary.get("content_preview") or "",
-    }
-    extracted = extract_verification_info_with_options(
-        email_obj,
-        code_regex=resolved_policy.get("code_regex"),
-        code_length=resolved_policy.get("code_length"),
-        code_source=code_source,
-        enforce_mutual_exclusion=False,
-    )
-    extracted = enhance_verification_with_ai_fallback(
-        email=email_obj,
-        extracted=extracted,
-        code_regex=resolved_policy.get("code_regex"),
-        code_length=resolved_policy.get("code_length"),
-        code_source=code_source,
-        enforce_mutual_exclusion=False,
-    )
+        extracted["email"] = email_addr
+        extracted["matched_email_id"] = message_id
+        extracted["from"] = detail.get("from_address") or latest_summary.get("from_address") or ""
+        extracted["subject"] = detail.get("subject") or latest_summary.get("subject") or ""
+        extracted["received_at"] = detail.get("created_at") or latest_summary.get("created_at") or ""
+        extracted["method"] = detail.get("method") or method
+        extracted["_log_channel"] = (
+            "ai_fallback"
+            if extracted.get("_used_ai")
+            and (extracted.get("verification_code") or extracted.get("verification_link"))
+            else _resolve_extract_log_channel(extracted, folder=folder, method=method)
+        )
+        extracted["_log_used_ai"] = bool(extracted.get("_used_ai"))
 
-    # ── 可信度门控：与临时邮箱提取路径使用统一逻辑 ──
-    extracted = apply_confidence_gate(extracted, enforce_mutual_exclusion=False)
-
-    extracted["email"] = email_addr
-    extracted["matched_email_id"] = message_id
-    extracted["from"] = detail.get("from_address") or latest_summary.get("from_address") or ""
-    extracted["subject"] = detail.get("subject") or latest_summary.get("subject") or ""
-    extracted["received_at"] = detail.get("created_at") or latest_summary.get("created_at") or ""
-    extracted["method"] = detail.get("method") or method
-    return _shape_verification_result_by_expected_field(extracted, expected_field)
+        result = _shape_verification_result_by_expected_field(extracted, expected_field)
+        log_channel = _resolve_extract_log_channel(result, folder=folder, method=method)
+        used_ai = bool(result.get("_log_used_ai"))
+        return _strip_extract_log_fields(result)
+    except Exception as exc:
+        error_code = _classify_extract_error(exc)
+        raise
+    finally:
+        result_type, code_found = resolve_extract_log_outcome(result)
+        _write_extract_log(
+            account_id=account_id,
+            channel=log_channel,
+            started_at=started_at,
+            finished_at=time.time(),
+            result_type=result_type,
+            code_found=code_found,
+            used_ai=used_ai,
+            error_code=error_code,
+            trace_id=trace_id,
+        )
 
 
 def wait_for_message(  # noqa: C901

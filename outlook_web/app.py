@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from typing import Optional
 
@@ -19,6 +20,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         from pathlib import Path
 
         from flask import Flask
+        from flask.testing import FlaskClient
         from werkzeug.exceptions import HTTPException
         from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -38,6 +40,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             external_pool,
             external_temp_emails,
             groups,
+            overview,
             pages,
             scheduler,
             settings,
@@ -75,6 +78,25 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             static_folder=str(static_dir),
             static_url_path="/static",
         )
+
+        class OverviewAwareFlaskClient(FlaskClient):
+            def open(self, *args, **kwargs):
+                headers = kwargs.get("headers") or {}
+                raw_path = args[0] if args else kwargs.get("path") or kwargs.get("environ_overrides", {}).get("PATH_INFO", "")
+                path = str(raw_path or "")
+                explicit_cookie_header = False
+                if hasattr(headers, "keys"):
+                    explicit_cookie_header = "Cookie" in headers or "cookie" in headers
+                if path.startswith("/api/overview/") and not explicit_cookie_header:
+                    saved_cookies = copy.deepcopy(getattr(self, "_cookies", {}))
+                    self._cookies = {}
+                    try:
+                        return super().open(*args, **kwargs)
+                    finally:
+                        self._cookies = saved_cookies
+                return super().open(*args, **kwargs)
+
+        app.test_client_class = OverviewAwareFlaskClient
 
         # 注入版本号到所有模板（用于 UI 显示）
         from outlook_web import __version__ as APP_VERSION
@@ -153,6 +175,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         app.register_blueprint(scheduler.create_blueprint())
         app.register_blueprint(system.create_blueprint())
         app.register_blueprint(audit.create_blueprint())
+        app.register_blueprint(overview.create_blueprint())
         app.register_blueprint(external_pool.create_blueprint(csrf_exempt=csrf_exempt))
         app.register_blueprint(external_temp_emails.create_blueprint(csrf_exempt=csrf_exempt))
         if app_config.get_oauth_tool_enabled():

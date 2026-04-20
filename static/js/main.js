@@ -437,7 +437,7 @@
             // Close mobile sidebar
             closeSidebar();
             // Load page data
-            if (page === 'dashboard') loadDashboard();
+            if (page === 'dashboard' && typeof initOverview === 'function') initOverview();
             if (page === 'mailbox') {
                 if (groups.length === 0) {
                     loadGroups();
@@ -462,7 +462,7 @@
             const actionsEl = document.getElementById('topbar-actions');
             const mailboxViewModeTemplate = document.getElementById('mailboxViewModeSwitcherTemplate');
             const titles = {
-                'dashboard': ['仪表盘', '系统概览'],
+                'dashboard': ['数据概览', '运营数据大盘'],
                 'mailbox': ['账号管理', '管理邮箱账号与查看邮件'],
                 'temp-emails': ['临时邮箱', '创建和管理临时邮箱'],
                 'refresh-log': ['刷新日志', 'Token 刷新历史记录'],
@@ -971,8 +971,8 @@
                 searchInput.addEventListener('input', debouncedSearch);
             }
 
-            // 加载仪表盘
-            loadDashboard();
+            // 加载数据概览
+            if (typeof initOverview === 'function') initOverview();
 
             // 检查是否有版本更新（页面加载时调一次）
             checkVersionUpdate();
@@ -2550,18 +2550,44 @@ ${details}
             if (!input) return;
 
             const value = input.value || '';
-            if (!value.trim()) {
+            const maskedValue = input.dataset.maskedValue || '';
+            const isSet = input.dataset.isSet === 'true';
+            let copyValue = value.trim();
+
+            if (isSet && copyValue && maskedValue && copyValue === maskedValue) {
+                try {
+                    const resp = await fetch('/api/settings/external-api-key/plaintext');
+                    const data = await resp.json();
+                    if (!resp.ok || !data.success || !data.api_key) {
+                        throw new Error((data && (data.message || data.error?.message)) || '获取真实 API Key 失败');
+                    }
+                    copyValue = String(data.api_key || '').trim();
+                } catch (error) {
+                    showToast(`${translateAppTextLocal('请求失败')}: ${error.message}`, 'error');
+                    return;
+                }
+            }
+
+            if (!copyValue) {
                 showToast(translateAppTextLocal('当前没有可复制的 API Key'), 'warning');
                 return;
             }
 
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(value);
+                    await navigator.clipboard.writeText(copyValue);
                 } else {
-                    input.focus();
-                    input.select();
+                    const tempInput = document.createElement('textarea');
+                    tempInput.value = copyValue;
+                    tempInput.setAttribute('readonly', 'readonly');
+                    tempInput.style.position = 'fixed';
+                    tempInput.style.opacity = '0';
+                    tempInput.style.pointerEvents = 'none';
+                    document.body.appendChild(tempInput);
+                    tempInput.focus();
+                    tempInput.select();
                     const ok = document.execCommand('copy');
+                    document.body.removeChild(tempInput);
                     if (!ok) {
                         throw new Error('execCommand_copy_failed');
                     }
